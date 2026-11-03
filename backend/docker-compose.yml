@@ -1,0 +1,30 @@
+# Local dev MySQL. Run from backend/: `docker compose up -d`
+# Values come from backend/.env (copy .env.example first).
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: dexa-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?DB_ROOT_PASSWORD must be set in backend/.env}
+      MYSQL_USER: ${DB_USER:?DB_USER must be set in backend/.env}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in backend/.env}
+      # Read by the init script: one database per service.
+      DB_AUTH_NAME: ${DB_AUTH_NAME:-dexa_auth}
+      DB_EMPLOYEE_NAME: ${DB_EMPLOYEE_NAME:-dexa_employee}
+      DB_ATTENDANCE_NAME: ${DB_ATTENDANCE_NAME:-dexa_attendance}
+      TZ: ${DB_TIMEZONE:-Asia/Jakarta}
+    ports:
+      - '${DB_PORT:-3306}:3306'
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Runs only on first start (empty volume).
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql_data:

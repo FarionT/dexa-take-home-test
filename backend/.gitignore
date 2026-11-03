@@ -1,0 +1,29 @@
+# NestJS backend
+
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Tests
+coverage/
+.nyc_output/
+
+# Logs
+logs/
+*.log
+
+# Env files
+.env
+.env.*
+!.env.example
+
+# Uploaded attendance photos
+uploads/
+
+# Temp
+.temp/
+.tmp/
