@@ -4,21 +4,32 @@ Fullstack take-home test: a WFH employee attendance app (employees log in and cl
 
 | Folder | Stack |
 |--------|-------|
-| [`backend/`](backend/) | NestJS 12 + TypeScript, MySQL 8.4 |
+| [`backend/`](backend/) | NestJS 12 + TypeScript (microservices monorepo), MySQL 8.4 |
 | [`frontend/`](frontend/) | React + Vite + TypeScript |
+
+## Architecture
+
+```
+Browser ──HTTP──▶ gateway    :3000 ──TCP──▶ auth       :3001 ─▶ dexa_auth
+                                    ──TCP──▶ employee   :3002 ─▶ dexa_employee
+                                    ──TCP──▶ attendance :3003 ─▶ dexa_attendance
+```
+
+The backend is four NestJS apps in one monorepo: an HTTP **gateway** (the only entry point for the frontend) and three **TCP microservices**. Each service runs as its own process and owns its own database. If one service goes down, the others keep working. See [`backend/README.md`](backend/README.md).
 
 ## Tech choices
 
 - **MySQL**: listed as a preferred database in the brief, and the data (employees, credentials, attendance records) is plainly relational.
-- **One database per service** (`dexa_auth`, `dexa_employee`, `dexa_attendance`), following the microservices requirement: each service owns its data.
+- **Microservices** because the brief asks for it. At this scale a single modular NestJS app would normally be enough; the split is kept light (NestJS built-in TCP transport, no message broker).
+- **One database per service** (`dexa_auth`, `dexa_employee`, `dexa_attendance`): each service owns its data; services never read each other's tables.
 - **Photos** are stored as files; the database keeps only the file path and metadata.
 
 ## Requirements
 
-- Node.js (v22+)
+- Node.js 22.18+
 - Docker (Docker Desktop on macOS/Windows)
 
-Default ports: MySQL `3306`, backend `3000`, frontend `5173`.
+Default ports: MySQL `3306`, gateway `3000`, services `3001`–`3003`, frontend `5173`.
 
 ## Running locally
 
@@ -37,8 +48,10 @@ On first start MySQL creates the three databases and grants `DB_USER` access to 
 ```bash
 cd backend
 npm install
-npm run start:dev      # http://localhost:3000
+npm run start:dev      # all four apps; gateway on http://localhost:3000
 ```
+
+Check http://localhost:3000/health: it shows whether each service is up.
 
 ### 3. Frontend
 
