@@ -47,7 +47,7 @@ dexa-test/
 │   │   │   │   └── health/   # public /health
 │   │   │   └── test/         # e2e tests (gateway.e2e-spec.ts)
 │   │   ├── auth/             # TCP microservice (:3001), DB dexa_auth
-│   │   │   ├── src/          # auth.service.ts (login, me, change password), users/ (accounts + guardrails), passwords/, tokens/
+│   │   │   ├── src/          # login/ (login, me, change password; signs JWTs), users/ (accounts + guardrails), passwords/, tokens/
 │   │   │   ├── migrations/   # sequelize-cli TS migrations for dexa_auth
 │   │   │   └── seeders/      # HR admin login seed
 │   │   ├── employee/         # TCP microservice (:3002), DB dexa_employee
@@ -251,6 +251,7 @@ Run inside the folder. **Confirm each command against that folder's `package.jso
 - Backend was scaffolded with `@nestjs/cli@12`: ESM (`"type": "module"`), so relative imports need the `.js` suffix (e.g. `./app.module.js`). Tests use **vitest** (not jest), lint uses **oxlint** (not eslint). `typescript` pinned to `~6.0.x` here too.
 - Backend uses `@nestjs/platform-express` (scaffold default) as the HTTP adapter.
 - Database: **MySQL 8.4** via `backend/docker-compose.yml` (`docker compose up -d` inside `backend/`). One database per service: `dexa_auth`, `dexa_employee`, `dexa_attendance`. The init script only runs on an empty volume; `docker compose down -v` resets it but **deletes data** — ask first.
+- Backend service app layout (auth, employee, attendance): the `src/` root holds only `main.ts`, `<app>.module.ts` and `ping.controller.ts` / `ping.service.ts` (the health check `GET /health` sends). Everything else lives in a feature folder (`login/`, `users/`, `employees/`, `attendances/`, …) with its own controller and service.
 - Backend microservices: apps **never import from each other**; shared code goes in `backend/libs/shared` (`@app/shared`). The gateway talks to services only via `ClientProxy.send()` with patterns from `libs/shared/src/patterns.ts`. Services own their DB; never read another service's DB.
 - Backend monorepo uses the plain `tsc` builder (not rspack). `nest generate app/library` would switch it to rspack and add jest files, so add apps/libs by hand following the existing ones (folder + `tsconfig.app.json` + `nest-cli.json` project + `SERVICE_KEYS` entry).
 - `process.env` is read only in `libs/shared/src/services.ts`, `apps/gateway/src/main.ts` (both needed before DI exists) `scripts/`, `sequelize.config.ts` and `apps/*/seeders/` (CLI tools, no DI). App code reads config through `ConfigService` (`@nestjs/config`, `ConfigModule.forRoot({ isGlobal: true })` in each app). `.env` is loaded by `nest start --env-file` / `node --env-file`.

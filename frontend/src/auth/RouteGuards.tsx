@@ -52,7 +52,7 @@ export function RequireRole({ role }: { role: Role }) {
     return (
       <FullPageMessage
         title="You don't have access to this page"
-        description="This page is for HR admins only."
+        description="This is restricted page. Please contact your administrator if you think this is a mistake."
         action={{ label: 'Go to home', onClick: () => navigate('/') }}
       />
     )

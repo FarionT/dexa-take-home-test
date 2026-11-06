@@ -26,7 +26,9 @@ interface NavItem {
 
 const NAV: NavItem[] = [
   { to: '/', label: 'Home', roles: ['ADMIN', 'EMPLOYEE'] },
+  { to: '/attendance', label: 'Attendance', roles: ['ADMIN', 'EMPLOYEE'] },
   { to: '/employees', label: 'Employees', roles: ['ADMIN'] },
+  { to: '/monitoring', label: 'Monitoring', roles: ['ADMIN'] },
 ]
 
 /** The page frame for logged-in pages: header with navigation and account, then the page title and content. */
@@ -41,7 +43,7 @@ export function AppLayout({ title, description, actions, back, children }: AppLa
         <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
           <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Brand />
-            <nav className="flex gap-1" aria-label="Main">
+            <nav className="flex flex-wrap gap-1" aria-label="Main">
               {NAV.filter((item) => item.roles.includes(user.role)).map((item) => (
                 <NavLink
                   key={item.to}

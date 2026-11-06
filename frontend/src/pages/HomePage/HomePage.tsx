@@ -17,10 +17,14 @@ interface Feature {
 }
 
 const FEATURES: Feature[] = [
-  { title: 'WFH attendance', description: 'Check in and check out with a photo as proof.', roles: ['EMPLOYEE', 'ADMIN'] },
-  { title: 'My attendance', description: 'Your check-in and check-out history.', roles: ['EMPLOYEE', 'ADMIN'] },
+  {
+    title: 'WFH attendance',
+    description: 'Check in and check out with a photo, and see your history.',
+    roles: ['EMPLOYEE', 'ADMIN'],
+    to: '/attendance',
+  },
   { title: 'Employees', description: 'Add employees and update their data.', roles: ['ADMIN'], to: '/employees' },
-  { title: 'Attendance monitoring', description: "View every employee's attendance.", roles: ['ADMIN'] },
+  { title: 'Attendance monitoring', description: "View every employee's attendance.", roles: ['ADMIN'], to: '/monitoring' },
 ]
 
 export function HomePage() {

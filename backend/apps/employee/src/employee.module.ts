@@ -9,8 +9,8 @@ import { EmployeeCodeService } from './employees/employee-code.service.js';
 import { Employee } from './employees/employee.model.js';
 import { EmployeesController } from './employees/employees.controller.js';
 import { EmployeesService } from './employees/employees.service.js';
-import { EmployeeController } from './employee.controller.js';
-import { EmployeeService } from './employee.service.js';
+import { PingController } from './ping.controller.js';
+import { PingService } from './ping.service.js';
 
 @Module({
   imports: [
@@ -23,7 +23,7 @@ import { EmployeeService } from './employee.service.js';
     }),
     SequelizeModule.forFeature([Department, Employee]),
   ],
-  controllers: [EmployeeController, DepartmentsController, EmployeesController],
-  providers: [EmployeeService, EmployeeCodeService, DepartmentsService, EmployeesService],
+  controllers: [PingController, DepartmentsController, EmployeesController],
+  providers: [PingService, EmployeeCodeService, DepartmentsService, EmployeesService],
 })
 export class EmployeeModule {}

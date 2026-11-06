@@ -1,6 +1,7 @@
 import { Route, Routes } from 'react-router'
 import { GuestOnly, RequireAuth, RequireRole } from './auth/RouteGuards'
 import {
+  AttendancePage,
   ChangePasswordPage,
   EmployeeCreatePage,
   EmployeeDetailPage,
@@ -8,6 +9,7 @@ import {
   EmployeesPage,
   HomePage,
   LoginPage,
+  MonitoringPage,
   NotFoundPage,
 } from './pages'
 
@@ -25,6 +27,7 @@ function App() {
 
       <Route element={<RequireAuth />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/attendance" element={<AttendancePage />} />
 
         {/* HR only. The backend refuses these requests for other roles too. */}
         <Route element={<RequireRole role="ADMIN" />}>
@@ -32,6 +35,7 @@ function App() {
           <Route path="/employees/new" element={<EmployeeCreatePage />} />
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/employees/:id/edit" element={<EmployeeEditPage />} />
+          <Route path="/monitoring" element={<MonitoringPage />} />
         </Route>
       </Route>
 

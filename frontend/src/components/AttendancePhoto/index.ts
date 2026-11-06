@@ -1,0 +1,1 @@
+export { AttendancePhoto } from './AttendancePhoto'
