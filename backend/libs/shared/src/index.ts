@@ -1,3 +1,4 @@
+export * from './attendance.js';
 export * from './auth.js';
 export * from './database.js';
 export * from './domain.js';

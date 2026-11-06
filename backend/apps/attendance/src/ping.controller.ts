@@ -2,14 +2,15 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { ATTENDANCE_PATTERNS } from '@app/shared';
 import type { ServicePing } from '@app/shared';
-import { AttendanceService } from './attendance.service.js';
+import { PingService } from './ping.service.js';
 
+/** Health check: the gateway's GET /health sends this to every service. */
 @Controller()
-export class AttendanceController {
-  constructor(private readonly attendanceService: AttendanceService) {}
+export class PingController {
+  constructor(private readonly pingService: PingService) {}
 
   @MessagePattern(ATTENDANCE_PATTERNS.PING)
   ping(): Promise<ServicePing> {
-    return this.attendanceService.ping();
+    return this.pingService.ping();
   }
 }

@@ -9,11 +9,11 @@ const rootElement = document.getElementById('root')
 if (!rootElement) throw new Error('index.html is missing <div id="root">')
 
 createRoot(rootElement).render(
-  <StrictMode>
+  // <StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <App />
       </AuthProvider>
     </BrowserRouter>
-  </StrictMode>,
+  // </StrictMode>,
 )

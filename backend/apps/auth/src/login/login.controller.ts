@@ -7,32 +7,26 @@ import type {
   LoginRequest,
   LoginResult,
   MeRequest,
-  ServicePing,
 } from '@app/shared';
-import { AuthService } from './auth.service.js';
+import { LoginService } from './login.service.js';
 
-/** TCP handlers. Payloads were already validated by the gateway's DTOs. */
+/** TCP handlers for logging in and the logged-in user. Payloads were already validated by the gateway's DTOs. */
 @Controller()
-export class AuthController {
-  constructor(private readonly authService: AuthService) {}
-
-  @MessagePattern(AUTH_PATTERNS.PING)
-  ping(): Promise<ServicePing> {
-    return this.authService.ping();
-  }
+export class LoginController {
+  constructor(private readonly loginService: LoginService) {}
 
   @MessagePattern(AUTH_PATTERNS.LOGIN)
   login(@Payload() request: LoginRequest): Promise<LoginResult> {
-    return this.authService.login(request);
+    return this.loginService.login(request);
   }
 
   @MessagePattern(AUTH_PATTERNS.ME)
   me(@Payload() request: MeRequest): Promise<AuthUser> {
-    return this.authService.me(request);
+    return this.loginService.me(request);
   }
 
   @MessagePattern(AUTH_PATTERNS.CHANGE_PASSWORD)
   changePassword(@Payload() request: ChangePasswordRequest): Promise<LoginResult> {
-    return this.authService.changePassword(request);
+    return this.loginService.changePassword(request);
   }
 }

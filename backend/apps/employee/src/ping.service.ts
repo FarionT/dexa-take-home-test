@@ -4,12 +4,12 @@ import { checkDatabase, createPing } from '@app/shared';
 import type { ServicePing } from '@app/shared';
 
 @Injectable()
-export class AttendanceService {
-  private readonly logger = new Logger(AttendanceService.name);
+export class PingService {
+  private readonly logger = new Logger(PingService.name);
 
   constructor(private readonly sequelize: Sequelize) {}
 
   async ping(): Promise<ServicePing> {
-    return createPing('attendance', await checkDatabase(this.sequelize, this.logger));
+    return createPing('employee', await checkDatabase(this.sequelize, this.logger));
   }
 }

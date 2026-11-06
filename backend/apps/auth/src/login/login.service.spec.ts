@@ -4,10 +4,9 @@ import { RpcException } from '@nestjs/microservices';
 import { getModelToken } from '@nestjs/sequelize';
 import { Test } from '@nestjs/testing';
 import { hash } from 'bcryptjs';
-import { Sequelize } from 'sequelize-typescript';
-import { AuthService } from './auth.service.js';
-import { PasswordService } from './passwords/password.service.js';
-import { User } from './users/user.model.js';
+import { PasswordService } from '../passwords/password.service.js';
+import { User } from '../users/user.model.js';
+import { LoginService } from './login.service.js';
 
 // Real bcrypt (low cost to keep tests fast); fake database model and JWT signer.
 const PASSWORD = 'Secret123';
@@ -53,10 +52,10 @@ async function rpcErrorOf(promise: Promise<unknown>): Promise<unknown> {
   throw new Error('expected an RpcException');
 }
 
-describe('AuthService', () => {
+describe('LoginService', () => {
   const users = { findOne: vi.fn(), findByPk: vi.fn() };
   const signAsync = vi.fn<(payload: object) => Promise<string>>();
-  let service: AuthService;
+  let service: LoginService;
   let passwords: PasswordService;
 
   beforeEach(async () => {
@@ -65,15 +64,14 @@ describe('AuthService', () => {
     signAsync.mockReset().mockResolvedValue('signed-token');
     const module = await Test.createTestingModule({
       providers: [
-        AuthService,
+        LoginService,
         PasswordService,
-        { provide: Sequelize, useValue: {} },
         { provide: getModelToken(User), useValue: users },
         { provide: JwtService, useValue: { signAsync } },
         { provide: ConfigService, useValue: { getOrThrow: () => '1d' } },
       ],
     }).compile();
-    service = module.get(AuthService);
+    service = module.get(LoginService);
     passwords = module.get(PasswordService);
   });
 

@@ -2,14 +2,15 @@ import { Controller } from '@nestjs/common';
 import { MessagePattern } from '@nestjs/microservices';
 import { EMPLOYEE_PATTERNS } from '@app/shared';
 import type { ServicePing } from '@app/shared';
-import { EmployeeService } from './employee.service.js';
+import { PingService } from './ping.service.js';
 
+/** Health check: the gateway's GET /health sends this to every service. */
 @Controller()
-export class EmployeeController {
-  constructor(private readonly employeeService: EmployeeService) {}
+export class PingController {
+  constructor(private readonly pingService: PingService) {}
 
   @MessagePattern(EMPLOYEE_PATTERNS.PING)
   ping(): Promise<ServicePing> {
-    return this.employeeService.ping();
+    return this.pingService.ping();
   }
 }

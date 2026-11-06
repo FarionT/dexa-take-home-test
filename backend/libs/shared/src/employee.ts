@@ -81,3 +81,27 @@ export interface UpdateEmployeeResult {
 export interface DeleteEmployeeRequest {
   id: string;
 }
+
+/**
+ * Who an attendance record belongs to (HR monitoring). Deleted employees are
+ * included, so their old records still show a name.
+ */
+export interface EmployeeSummary {
+  id: string;
+  employee_code: string;
+  full_name: string;
+  department: DepartmentRecord;
+  status: EmployeeStatus;
+  is_deleted: boolean;
+}
+
+/** Ids of the employees matching HR's filters (deleted ones included). */
+export interface FindEmployeeIdsRequest {
+  /** Partial match on name, employee code or email, as in the employee list. */
+  search?: string;
+  department_id?: string;
+}
+
+export interface FindEmployeesByIdsRequest {
+  ids: string[];
+}

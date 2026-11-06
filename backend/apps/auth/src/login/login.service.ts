@@ -1,9 +1,8 @@
-import { HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { HttpStatus, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { InjectModel } from '@nestjs/sequelize';
-import { Sequelize } from 'sequelize-typescript';
-import { checkDatabase, createPing, normalizeEmail, rpcError } from '@app/shared';
+import { normalizeEmail, rpcError } from '@app/shared';
 import type {
   AuthUser,
   ChangePasswordRequest,
@@ -11,33 +10,27 @@ import type {
   LoginRequest,
   LoginResult,
   MeRequest,
-  ServicePing,
 } from '@app/shared';
-import { PasswordService } from './passwords/password.service.js';
-import { parseDurationToSeconds } from './tokens/token-lifetime.js';
-import { User } from './users/user.model.js';
+import { PasswordService } from '../passwords/password.service.js';
+import { parseDurationToSeconds } from '../tokens/token-lifetime.js';
+import { User } from '../users/user.model.js';
 
 // Same message for an unknown email and a wrong password: don't reveal which emails exist.
 const INVALID_CREDENTIALS = 'Invalid email or password';
 const SESSION_INVALID = 'Your session is no longer valid. Please log in again.';
 
+/** Login, the logged-in user (`me`) and changing the own password. Signs the JWTs. */
 @Injectable()
-export class AuthService {
-  private readonly logger = new Logger(AuthService.name);
+export class LoginService {
   private readonly tokenLifetimeSeconds: number;
 
   constructor(
-    private readonly sequelize: Sequelize,
     @InjectModel(User) private readonly users: typeof User,
     private readonly passwords: PasswordService,
     private readonly jwt: JwtService,
     config: ConfigService,
   ) {
     this.tokenLifetimeSeconds = parseDurationToSeconds(config.getOrThrow<string>('JWT_EXPIRES_IN'));
-  }
-
-  async ping(): Promise<ServicePing> {
-    return createPing('auth', await checkDatabase(this.sequelize, this.logger));
   }
 
   async login(request: LoginRequest): Promise<LoginResult> {

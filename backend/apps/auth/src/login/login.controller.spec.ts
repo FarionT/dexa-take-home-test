@@ -1,14 +1,12 @@
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
-import { createPing } from '@app/shared';
-import { AuthController } from './auth.controller.js';
-import { AuthService } from './auth.service.js';
+import { LoginController } from './login.controller.js';
+import { LoginService } from './login.service.js';
 
-/** The controller only forwards messages; the logic is tested in auth.service.spec.ts. */
-describe('AuthController', () => {
-  let controller: AuthController;
+/** The controller only forwards messages; the logic is tested in login.service.spec.ts. */
+describe('LoginController', () => {
+  let controller: LoginController;
   const service = {
-    ping: vi.fn(),
     login: vi.fn(),
     me: vi.fn(),
     changePassword: vi.fn(),
@@ -17,16 +15,11 @@ describe('AuthController', () => {
   beforeEach(async () => {
     Object.values(service).forEach((fn) => fn.mockReset());
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: service }],
+      controllers: [LoginController],
+      providers: [{ provide: LoginService, useValue: service }],
     }).compile();
 
-    controller = module.get(AuthController);
-  });
-
-  it('answers ping', async () => {
-    service.ping.mockResolvedValue(createPing('auth', 'up'));
-    expect(await controller.ping()).toMatchObject({ service: 'auth', status: 'ok', database: 'up' });
+    controller = module.get(LoginController);
   });
 
   it('forwards login, me and change-password payloads', async () => {

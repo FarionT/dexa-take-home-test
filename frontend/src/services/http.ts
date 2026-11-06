@@ -72,6 +72,35 @@ export async function request<T>(config: AxiosRequestConfig, parse: (data: unkno
   }
 }
 
+/**
+ * For endpoints that return a file instead of JSON (e.g. an attendance photo).
+ * Errors still arrive as the JSON envelope, but inside a Blob, so they are
+ * read back as JSON first and then become an ApiError like any other request.
+ */
+export async function requestBlob(config: AxiosRequestConfig): Promise<Blob> {
+  try {
+    const response = await api.request<Blob>({ ...config, responseType: 'blob' })
+    return response.data
+  } catch (error: unknown) {
+    if (isAxiosError(error) && error.response?.data instanceof Blob) {
+      const body = await readJson(error.response.data)
+      throw isApiResponse(body)
+        ? new ApiError(body.status, body.message, validationErrorsOf(body.data))
+        : new ApiError(error.response.status, UNEXPECTED_RESPONSE)
+    }
+    throw toApiError(error)
+  }
+}
+
+async function readJson(blob: Blob): Promise<unknown> {
+  try {
+    const parsed: unknown = JSON.parse(await blob.text())
+    return parsed
+  } catch {
+    return undefined // not JSON: reported as an unexpected response
+  }
+}
+
 function toApiError(error: unknown): ApiError {
   if (error instanceof ApiError) return error
   if (!isAxiosError(error)) return new ApiError(0, 'Something went wrong. Please try again.')

@@ -41,12 +41,13 @@ dexa-test/
 │   │   │   ├── src/          # main.ts, gateway.module.ts (global pipe/filter/guards)
 │   │   │   │   ├── auth/     # /auth endpoints, DTOs, guards/, auth.decorators.ts
 │   │   │   │   ├── employees/  # /employees + /departments: DTOs, orchestration with undo steps
+│   │   │   │   ├── attendance/ # /attendance: check-in/out upload, photo/ (signature check, disk storage)
 │   │   │   │   ├── clients/  # TCP clients + rpc.ts (sendToService)
 │   │   │   │   ├── common/   # http-exception.filter.ts (snake_case error JSON)
 │   │   │   │   └── health/   # public /health
 │   │   │   └── test/         # e2e tests (gateway.e2e-spec.ts)
 │   │   ├── auth/             # TCP microservice (:3001), DB dexa_auth
-│   │   │   ├── src/          # auth.service.ts (login, me, change password), users/ (accounts + guardrails), passwords/, tokens/
+│   │   │   ├── src/          # login/ (login, me, change password; signs JWTs), users/ (accounts + guardrails), passwords/, tokens/
 │   │   │   ├── migrations/   # sequelize-cli TS migrations for dexa_auth
 │   │   │   └── seeders/      # HR admin login seed
 │   │   ├── employee/         # TCP microservice (:3002), DB dexa_employee
@@ -54,13 +55,13 @@ dexa-test/
 │   │   │   ├── migrations/
 │   │   │   └── seeders/      # departments + HR employee seed
 │   │   └── attendance/       # TCP microservice (:3003), DB dexa_attendance
-│   │       ├── src/          # attendances/ (model)
+│   │       ├── src/          # attendances/ (model, check-in/out day rules, day list)
 │   │       └── migrations/
 │   ├── libs/shared/src/      # `@app/shared`: service addresses, message patterns, domain enums, DB options, types
 │   ├── scripts/run-all.ts    # starts all four apps (npm run start:dev / start:prod)
 │   ├── sequelize.config.ts   # sequelize-cli config: one "env" per service DB (auth / employee / attendance)
 │   ├── docs/database-design.md  # tables, indexes, cross-DB rules (keep in sync with entities)
-│   ├── docs/api/             # API reference per feature (auth.md, employees.md); keep in sync with endpoints
+│   ├── docs/api/             # API reference per feature (auth.md, employees.md, attendance.md); keep in sync with endpoints
 │   ├── dist/                 # compiled output (do not edit)
 │   ├── nest-cli.json         # monorepo project list
 │   ├── tsconfig.json         # base + `@app/shared` path; each app has tsconfig.app.json
@@ -80,9 +81,10 @@ dexa-test/
     │   ├── types/            # API types + runtime type guards (snake_case fields)
     │   ├── services/         # http.ts (axios instance `api`, request(), ApiError), <feature>.service.ts, token-storage.ts
     │   ├── auth/             # AuthProvider, useAuth, RouteGuards (RequireAuth / GuestOnly)
+    │   ├── hooks/            # useRequest (data loading)
     │   ├── components/       # index.ts (barrel) + <Name>/{<Name>.tsx, index.ts, <Name>.scss only if needed}
     │   ├── pages/            # index.ts (barrel) + <Name>Page/{<Name>Page.tsx, index.ts, .scss only if needed}
-    │   ├── utils/            # form errors, password rules, router state readers
+    │   ├── utils/            # cx, attendance (limits, day status), form errors, employee form, format (incl. WIB times), labels, password rules, router state
     │   ├── index.css         # Tailwind entry + design tokens (the only .css file)
     │   └── vite-env.d.ts     # typed VITE_* env vars
     ├── .env.example
@@ -190,9 +192,11 @@ Run inside the folder. **Confirm each command against that folder's `package.jso
 - Env changes need dev server restart. Remind user.
 - Backend URL comes from env var or Vite `server.proxy`. Do not hardcode `localhost` URLs in components.
 - Static files in `public/` are served at root. Files imported from `src/` get bundled.
-- **API layer pattern**: HTTP uses **axios** through the single instance in `src/services/http.ts` (base URL, 15 s timeout, token request interceptor, 401 response interceptor). Call the backend only via `request(config, parseWith(<typeGuard>, '<what>'))` from a `src/services/<feature>.service.ts` function; never import `axios` in components, pages or other files, and never create another instance. The type guard checks the response at runtime (no `as` casts on API data). Errors are always `ApiError` (`status` 0 = unreachable or timeout); show them with `toFormErrors()` in forms.
+- **API layer pattern**: HTTP uses **axios** through the single instance in `src/services/http.ts` (base URL, 15 s timeout, token request interceptor, 401 response interceptor). Call the backend only via `request(config, parseWith(<typeGuard>, '<what>'))` from a `src/services/<feature>.service.ts` function; never import `axios` in components, pages or other files, and never create another instance. The type guard checks the response at runtime (no `as` casts on API data). Errors are always `ApiError` (`status` 0 = unreachable or timeout); show them with `toFormErrors()` in forms. File downloads (attendance photos) use `requestBlob()` and are shown via `URL.createObjectURL` (`AttendancePhoto`), never an `<img src>` to the API, since that can't send the token. The attendance camera uses `getUserMedia` (`CameraCapture`); file upload is only the fallback when no camera can be used.
 - **Folder rule**: every component and page has its own folder with `<Name>.tsx`, `index.ts` re-exporting it, and a `<Name>.scss` only if Tailwind can't express a style; register it in the root `components/index.ts` / `pages/index.ts`. Pages and other code import from the root barrel (`'../../components'`); components import each other by folder (`'../Button'`), never via the root barrel (circular imports).
-- **Auth in the UI**: read the session with `useAuth()`; put pages behind `RequireAuth` (or `GuestOnly`) routes in `App.tsx`. Route guards only decide what to show; the backend enforces access. Router `location.state` is read through the guards in `utils/location-state.ts`, never cast.
+- **Data loading**: pages load data with `useRequest(key, load)` (`src/hooks/useRequest.ts`), never with `useEffect` + `setState` (`react-hooks/set-state-in-effect` is an error). Put every input of the request in `key`. Handle `loading`, `error` (with a Try again calling `reload`) and the empty state.
+- **Non-component exports**: `.tsx` files export only components (`react-refresh/only-export-components`). Constants and helpers go in `.ts` files (e.g. `utils/labels.ts`, `Button/button-styles.ts`).
+- **Auth in the UI**: read the session with `useAuth()`; put pages behind `RequireAuth` (or `GuestOnly`) routes in `App.tsx`, and HR-only pages also inside `RequireRole role="ADMIN"`. Route guards only decide what to show; the backend enforces access. Router `location.state` is read through the guards in `utils/location-state.ts`, never cast.
 - **Styling: Tailwind CSS v4** utility classes (`@tailwindcss/vite`), joined with `cx()` from `src/utils/cx.ts`. Use the token colors from `src/index.css` (`bg-surface`, `text-ink-muted`, `border-line`, `bg-primary`, `{danger,info,success,warning}-{bg,line,ink}`, …), never Tailwind's raw palette or hex values: the tokens switch for dark mode. Never rely on `className` order to override a utility for the same property (Tailwind's CSS order wins); give each variant its own value. `src/index.css` is the **only** `.css` file (Tailwind v4 can't be loaded from `.scss`; it would silently produce no utilities). Anything Tailwind can't express goes in a co-located `<Name>.scss` (`sass` is installed). No UI library without asking.
 
 ## 8. Safety Rules (Never Break)
@@ -247,6 +251,7 @@ Run inside the folder. **Confirm each command against that folder's `package.jso
 - Backend was scaffolded with `@nestjs/cli@12`: ESM (`"type": "module"`), so relative imports need the `.js` suffix (e.g. `./app.module.js`). Tests use **vitest** (not jest), lint uses **oxlint** (not eslint). `typescript` pinned to `~6.0.x` here too.
 - Backend uses `@nestjs/platform-express` (scaffold default) as the HTTP adapter.
 - Database: **MySQL 8.4** via `backend/docker-compose.yml` (`docker compose up -d` inside `backend/`). One database per service: `dexa_auth`, `dexa_employee`, `dexa_attendance`. The init script only runs on an empty volume; `docker compose down -v` resets it but **deletes data** — ask first.
+- Backend service app layout (auth, employee, attendance): the `src/` root holds only `main.ts`, `<app>.module.ts` and `ping.controller.ts` / `ping.service.ts` (the health check `GET /health` sends). Everything else lives in a feature folder (`login/`, `users/`, `employees/`, `attendances/`, …) with its own controller and service.
 - Backend microservices: apps **never import from each other**; shared code goes in `backend/libs/shared` (`@app/shared`). The gateway talks to services only via `ClientProxy.send()` with patterns from `libs/shared/src/patterns.ts`. Services own their DB; never read another service's DB.
 - Backend monorepo uses the plain `tsc` builder (not rspack). `nest generate app/library` would switch it to rspack and add jest files, so add apps/libs by hand following the existing ones (folder + `tsconfig.app.json` + `nest-cli.json` project + `SERVICE_KEYS` entry).
 - `process.env` is read only in `libs/shared/src/services.ts`, `apps/gateway/src/main.ts` (both needed before DI exists) `scripts/`, `sequelize.config.ts` and `apps/*/seeders/` (CLI tools, no DI). App code reads config through `ConfigService` (`@nestjs/config`, `ConfigModule.forRoot({ isGlobal: true })` in each app). `.env` is loaded by `nest start --env-file` / `node --env-file`.
@@ -262,7 +267,7 @@ Run inside the folder. **Confirm each command against that folder's `package.jso
   - The auth service **signs** JWTs, the gateway **verifies** them; both read `JWT_SECRET` via `getJwtSecret()` (min 32 chars). Claims are `JwtPayload` in `@app/shared` (`sub`, `employee_id`, `role`, `must_change_password`).
   - Global guards in the gateway protect every endpoint by default. Use `@Public()`, `@Roles(...)`, `@AllowDuringPasswordChange()`, `@CurrentUser()`; never check auth inside a handler, and take ids from `@CurrentUser()`, never from the body or URL.
   - Gateway → service calls go through `sendToService()` (`apps/gateway/src/clients/rpc.ts`). Services report expected failures with `throw rpcError(status, message)`; anything else becomes a generic 500. Don't throw Nest `HttpException`s inside microservices (they arrive as 500).
-  - **Every response body is `{ status, message, data? }`** (`apps/gateway/src/common/api-response.ts`): `ResponseEnvelopeInterceptor` wraps what a handler returns, `HttpExceptionFilter` wraps errors. Handlers return plain data, never build the envelope themselves; set the success text with `@ResponseMessage('…')` (default `Success`). `data` is left out when empty; validation errors are `400 Validation failed` with `data.errors: string[]`. Never put internal details (hosts, ports, stack traces, SQL) in a response; log them instead. `/health` is public, so it reports only `unreachable` / `timeout`.
+  - **Every response body is `{ status, message, data? }`** (`apps/gateway/src/common/api-response.ts`): `ResponseEnvelopeInterceptor` wraps what a handler returns, `HttpExceptionFilter` wraps errors. Handlers return plain data, never build the envelope themselves; set the success text with `@ResponseMessage('…')` (default `Success`). `data` is left out when empty; validation errors are `400 Validation failed` with `data.errors: string[]`. Never put internal details (hosts, ports, stack traces, SQL) in a response; log them instead. `/health` is public, so it reports only `unreachable` / `timeout`. The one exception to the envelope is a file download: a handler returning a `StreamableFile` (e.g. `GET /attendance/:id/photo`) is sent as is.
   - Login: same `401 Invalid email or password` for unknown email and wrong password, and `PasswordService.verify()` runs bcrypt even when the user doesn't exist (timing).
 - **Role management guardrails** (backend; full rules in `backend/docs/database-design.md` → Roles). Apply to every endpoint or message that changes a user's role, deactivates, or deletes an employee/user:
   1. Only `ADMIN` may set `role` (gateway `RolesGuard` + DTO validation; default `EMPLOYEE`).
@@ -279,6 +284,7 @@ Run inside the folder. **Confirm each command against that folder's `package.jso
   - Migration files: TypeScript in `backend/apps/<service>/migrations/`, named `YYYYMMDDHHmmss-<description>.ts` (the CLI's 14-digit format), exporting `async function up(queryInterface, Sequelize)` and `down(queryInterface)`. Node runs them directly (type stripping), so only erasable TS syntax, and no `@app/shared` imports (write values out; migrations are snapshots).
   - **Do not use `sequelize-cli migration:generate`** (or `model:generate` / `init`): it writes CommonJS `.js` files, which fail in this ESM package (`module is not defined in ES module scope`) and break the TS-only rule. Create a migration by copying an existing `.ts` one and renaming it with a new timestamp.
 - `backend/docker/mysql/init/01-create-databases.sh` must stay executable (`chmod +x`): Docker Desktop mounts report it as executable either way, so the entrypoint runs it instead of sourcing it.
+- **Attendance uploads** (gateway, `apps/gateway/src/attendance/`): multipart is parsed by multer **in memory** (`MulterModule` limits from `UPLOAD_MAX_SIZE_MB`, 413 if bigger); `PhotoFilePipe` accepts only real JPEG/PNG/WebP by file signature (never trust `Content-Type` or the file name). Only `PhotoStorageService` touches `UPLOAD_DIR` (UUID names, paths checked to stay inside it); only the relative path goes over TCP. Photos are never public static files. The working day is computed by the attendance service in `ATTENDANCE_TIME_ZONE` (Asia/Jakarta) via `attendanceDateOf()`.
 - <add more known bugs, quirks, or gotchas here>
 
 ---

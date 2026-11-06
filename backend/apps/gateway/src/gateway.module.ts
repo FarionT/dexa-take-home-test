@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { getJwtSecret } from '@app/shared';
+import { AttendanceModule } from './attendance/attendance.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
@@ -24,6 +25,7 @@ import { HealthModule } from './health/health.module.js';
     HealthModule,
     AuthModule,
     EmployeesModule,
+    AttendanceModule,
   ],
   providers: [
     // Validates every request body against its DTO; unknown fields are rejected.

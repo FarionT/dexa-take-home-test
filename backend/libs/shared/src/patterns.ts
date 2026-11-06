@@ -24,8 +24,16 @@ export const EMPLOYEE_PATTERNS = {
   FIND_ONE: 'employee.find-one',
   UPDATE: 'employee.update',
   DELETE: 'employee.delete',
+  // Lookups for the HR attendance view (deleted employees included).
+  FIND_IDS: 'employee.find-ids',
+  FIND_BY_IDS: 'employee.find-by-ids',
 } as const;
 
 export const ATTENDANCE_PATTERNS = {
   PING: 'attendance.ping',
+  /** Check-in or check-out (the `type` in the payload says which). */
+  RECORD: 'attendance.record',
+  TODAY: 'attendance.today',
+  LIST_DAYS: 'attendance.list-days',
+  FIND_PHOTO: 'attendance.find-photo',
 } as const;

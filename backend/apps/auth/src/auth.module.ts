@@ -4,9 +4,11 @@ import { JwtModule } from '@nestjs/jwt';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { getJwtSecret, sequelizeOptions } from '@app/shared';
 import { User } from './users/user.model.js';
-import { AuthController } from './auth.controller.js';
-import { AuthService } from './auth.service.js';
+import { LoginController } from './login/login.controller.js';
+import { LoginService } from './login/login.service.js';
 import { PasswordService } from './passwords/password.service.js';
+import { PingController } from './ping.controller.js';
+import { PingService } from './ping.service.js';
 import { UsersController } from './users/users.controller.js';
 import { UsersService } from './users/users.service.js';
 
@@ -26,7 +28,7 @@ import { UsersService } from './users/users.service.js';
       useFactory: (config: ConfigService) => ({ secret: getJwtSecret(config) }),
     }),
   ],
-  controllers: [AuthController, UsersController],
-  providers: [AuthService, PasswordService, UsersService],
+  controllers: [PingController, LoginController, UsersController],
+  providers: [PingService, LoginService, PasswordService, UsersService],
 })
 export class AuthModule {}

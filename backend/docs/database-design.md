@@ -275,7 +275,10 @@ One row per clock event, with a photo as proof of working from home. No flow edi
 | Check-in: at most once per day | `409 Conflict`: already checked in today |
 | Check-out: only after a check-in on the **same** day | `400 Bad Request`: not checked in today |
 | Check-out: at most once per day | `409 Conflict`: already checked out today |
-| Both need a photo | `400 Bad Request` |
+| Both need a photo (JPEG / PNG / WebP by file signature, at most `UPLOAD_MAX_SIZE_MB`) | `400 Bad Request` / `413 Payload Too Large` (gateway) |
+| The employee must be `ACTIVE` (checked by the gateway with `employee.find-one`, because a token stays valid until it expires) | `403 Forbidden` (gateway) |
+
+The day rules are checked by the attendance service with a plain read before the insert; the unique key is the real guarantee when two requests arrive at once (the loser gets `409`). API details: [docs/api/attendance.md](api/attendance.md).
 
 A day's status is derived, not stored: **check-in only** = still working (or forgot to check out), **both** = complete. Work duration = check-out `recorded_at` − check-in `recorded_at`.
 
@@ -317,7 +320,7 @@ MySQL can't have foreign keys between databases, so the gateway enforces these w
 | Rule | How |
 |------|-----|
 | `users.employee_id` → `employees.id` | **Create employee**: the gateway creates the employee first, then the user with that `id`. If creating the user fails, it soft-deletes the just-created employee (compensating action), so there is never a live employee without a login. The employee's code stays used |
-| `attendances.employee_id` → `employees.id` | The ID comes from a valid JWT, and inactive users can't log in |
+| `attendances.employee_id` → `employees.id` | The ID comes from a valid JWT, and inactive users can't log in. Check-in / check-out also ask the employee service that the employee is still `ACTIVE`, since an existing token outlives a deactivation |
 | `employees.email` = `users.email` | Same value on create. On update, the gateway calls `employee.update` (which returns the old values), then `auth.update-account`; if the second step fails (email taken, guardrail refused), it restores the old employee values, including `updated_by` |
 | `employees.status` ↔ `users.is_active` | Setting an employee `INACTIVE` also sets `users.is_active = FALSE` (and back for `ACTIVE`) |
 | `employees.deleted_at` ↔ `users.deleted_at` | Deleting an employee soft-deletes their user first, then the employee (see Soft delete). HR only ever acts on the employee; there is no separate user list |
@@ -325,15 +328,19 @@ MySQL can't have foreign keys between databases, so the gateway enforces these w
 
 If an undo step itself fails, the gateway logs `MANUAL FIX NEEDED: …` with the ids and still returns the original error.
 
-**HR attendance view** joins data from two services: the attendance service returns the records, then the gateway fetches the matching names in one batch (`employee.find-by-ids`) and merges them. Names are not copied into `attendances`, so they never go stale.
+**HR attendance view** (`GET /attendance`) joins data from two services: if HR filters by department or name, the gateway first gets the matching ids (`employee.find-ids`); the attendance service returns one page of days; then the gateway fetches those employees' names in one batch (`employee.find-by-ids`) and merges them. Both lookups include soft-deleted employees (`paranoid: false`). Names are not copied into `attendances`, so they never go stale. The department filter uses the employee's current department. The id list grows with the number of matching employees, which is fine at this scale; a large company would need a reporting copy of the data instead.
 
 **Known limitation**: an existing JWT keeps its role and active state until it expires (`JWT_EXPIRES_IN`), so a deactivated employee's current token still works until then. Shorter tokens with refresh tokens would fix this; out of scope for this test.
 
 ## Photo storage
 
 Files go to disk under `UPLOAD_DIR` (`backend/uploads/`, git-ignored). The database stores only the path and metadata.
-- The file name is a new UUID, never the uploaded file name, which prevents path tricks and name clashes.
-- Photos are served through an authenticated gateway endpoint (the owning employee, or ADMIN), **not** as public static files.
+- The **gateway** writes and reads the files (`apps/gateway/src/attendance/photo/photo-storage.service.ts`); only the relative path travels to the attendance service over TCP.
+- Layout: `attendance/<year>/<month>/<uuid>.<jpg|png|webp>` (year and month in UTC).
+- The file name is a new UUID, never the uploaded file name, which prevents path tricks and name clashes. Paths that would resolve outside `UPLOAD_DIR` are refused.
+- The type is detected from the file's first bytes (JPEG `FF D8 FF`, PNG `89 50 4E 47 …`, WebP `RIFF….WEBP`); the client's `Content-Type` and file name are ignored.
+- If the attendance service refuses the record (e.g. already checked in), the gateway removes the file it just saved. On `503` (timeout / service down) it keeps it, because the record may have been stored.
+- Photos are served through an authenticated gateway endpoint, `GET /attendance/:id/photo` (the owning employee, or ADMIN; anyone else gets `404`), **not** as public static files.
 
 ## Seed data (needs approval before running)
 
