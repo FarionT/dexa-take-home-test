@@ -87,8 +87,8 @@ Any other field is rejected (`property role should not exist`).
     "token_type": "Bearer",
     "expires_in": 86400,
     "user": {
-      "id": "a0000000-0000-4000-8000-000000000001",
-      "employee_id": "e0000000-0000-4000-8000-000000000001",
+      "id": "5e8d2a1c-3f4b-4c6d-9e7f-8a0b1c2d3e4f",
+      "employee_id": "9b1f4c2e-7d3a-4e8b-a6c5-2f0e1d9c8b7a",
       "email": "hradmin@company.com",
       "role": "ADMIN",
       "must_change_password": false,
@@ -149,8 +149,8 @@ curl -s http://localhost:3000/auth/me -H "Authorization: Bearer $TOKEN"
   "status": 200,
   "message": "Current user",
   "data": {
-    "id": "a0000000-0000-4000-8000-000000000001",
-    "employee_id": "e0000000-0000-4000-8000-000000000001",
+    "id": "5e8d2a1c-3f4b-4c6d-9e7f-8a0b1c2d3e4f",
+    "employee_id": "9b1f4c2e-7d3a-4e8b-a6c5-2f0e1d9c8b7a",
     "email": "hradmin@company.com",
     "role": "ADMIN",
     "must_change_password": false,
@@ -237,8 +237,8 @@ The `access_token` is a JWT signed with `HS256` and `JWT_SECRET`. Clients may de
 
 ```json
 {
-  "sub": "a0000000-0000-4000-8000-000000000001",
-  "employee_id": "e0000000-0000-4000-8000-000000000001",
+  "sub": "5e8d2a1c-3f4b-4c6d-9e7f-8a0b1c2d3e4f",
+  "employee_id": "9b1f4c2e-7d3a-4e8b-a6c5-2f0e1d9c8b7a",
   "role": "ADMIN",
   "must_change_password": false,
   "iat": 1793946610,

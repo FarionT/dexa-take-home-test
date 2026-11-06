@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { hash } from 'bcryptjs';
 import type { QueryInterface } from 'sequelize';
 
@@ -9,11 +10,13 @@ type SequelizeModule = typeof import('sequelize');
  * apps/employee/seeders/20261106000001-seed-departments-and-hr.ts.
  * Run the employee seeder first (`npm run db:seed` does).
  *
- * SEED_HR_EMPLOYEE_ID must match the employee seeder: the link is a logical
- * reference, this seeder never reads dexa_employee. Safe to run again.
+ * Both ids are random (a well-known admin id in the repo would make forged
+ * tokens easier), so the login is linked to the HR employee by looking it up
+ * by SEED_ADMIN_EMAIL in the employee database (DB_EMPLOYEE_NAME, same MySQL
+ * server). This is the one place outside the employee service that reads
+ * dexa_employee: a one-time setup tool run by a person, not service code.
+ * Safe to run again: an existing login for that email or employee is kept.
  */
-const SEED_HR_EMPLOYEE_ID = 'e0000000-0000-4000-8000-000000000001';
-const SEED_ADMIN_USER_ID = 'a0000000-0000-4000-8000-000000000001';
 const MIN_PASSWORD_LENGTH = 8;
 const BCRYPT_ROUNDS = 12;
 
@@ -31,13 +34,28 @@ export async function up(qi: QueryInterface, Sequelize: SequelizeModule): Promis
     throw new Error(`SEED_ADMIN_PASSWORD must be at least ${MIN_PASSWORD_LENGTH} characters.`);
   }
 
-  const [current] = await qi.sequelize.query<{ id: string }>(
-    'SELECT `id` FROM `users` WHERE (`id` = ? OR `email` = ? OR `employee_id` = ?) AND `deleted_at` IS NULL',
-    { replacements: [SEED_ADMIN_USER_ID, email, SEED_HR_EMPLOYEE_ID], type: QueryTypes.SELECT },
+  const employeeDatabase = requireEnv('DB_EMPLOYEE_NAME');
+  if (!/^[A-Za-z0-9_]+$/.test(employeeDatabase)) {
+    throw new Error('DB_EMPLOYEE_NAME may only contain letters, digits and underscores.');
+  }
+
+  // The HR employee created by the employee seeder (or through the app), found by email.
+  const [employee] = await qi.sequelize.query<{ id: string }>(
+    `SELECT \`id\` FROM \`${employeeDatabase}\`.\`employees\` WHERE \`email\` = ? AND \`deleted_at\` IS NULL`,
+    { replacements: [email], type: QueryTypes.SELECT },
+  );
+  if (!employee) {
+    throw new Error(`No live employee with ${email} in ${employeeDatabase}. Run the employee seeder first (npm run db:seed does).`);
+  }
+
+  const [current] = await qi.sequelize.query<{ id: string; employee_id: string }>(
+    'SELECT `id`, `employee_id` FROM `users` WHERE (`email` = ? OR `employee_id` = ?) AND `deleted_at` IS NULL',
+    { replacements: [email, employee.id], type: QueryTypes.SELECT },
   );
   if (current) {
-    if (current.id !== SEED_ADMIN_USER_ID) {
-      throw new Error(`A different login already uses ${email} or the seeded HR employee.`);
+    // Already seeded. A login with this email for some other employee means the data is mixed up.
+    if (current.employee_id !== employee.id) {
+      throw new Error(`A different login already uses ${email}. Use a different SEED_ADMIN_EMAIL.`);
     }
     return;
   }
@@ -45,8 +63,8 @@ export async function up(qi: QueryInterface, Sequelize: SequelizeModule): Promis
   const now = new Date();
   await qi.bulkInsert('users', [
     {
-      id: SEED_ADMIN_USER_ID,
-      employee_id: SEED_HR_EMPLOYEE_ID,
+      id: randomUUID(),
+      employee_id: employee.id,
       email,
       // Only the hash is stored; the plain password is never logged or saved.
       password_hash: await hash(password, BCRYPT_ROUNDS),
@@ -63,5 +81,6 @@ export async function up(qi: QueryInterface, Sequelize: SequelizeModule): Promis
 }
 
 export async function down(qi: QueryInterface): Promise<void> {
-  await qi.bulkDelete('users', { id: SEED_ADMIN_USER_ID });
+  // The id is random, so the seeded login is found by its email.
+  await qi.bulkDelete('users', { email: requireEnv('SEED_ADMIN_EMAIL').toLowerCase() });
 }
