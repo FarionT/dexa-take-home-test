@@ -332,7 +332,7 @@ Apply to `PATCH` (`role`, `status`), reset-password and `DELETE`:
 | The **last active ADMIN** can't be demoted, deactivated or deleted | `409 This is the last active HR admin. Make someone else HR admin first.` |
 | Every change records who made it | `updated_by` |
 
-The last-admin rule is safe under concurrency: if two HR admins demote each other at the same moment, exactly one succeeds and the other gets `409` (tested). A demoted admin's current token keeps its old role until it expires; they get the new role at their next login.
+The last-admin rule is safe under concurrency: if two HR admins demote each other at the same moment, exactly one succeeds and the other gets `409` (tested). The change applies at the demoted admin's next request: the gateway checks the current role on every request, so HR endpoints give them `403` right away.
 
 ## Lifecycle
 

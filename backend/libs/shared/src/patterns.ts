@@ -7,6 +7,8 @@ export const AUTH_PATTERNS = {
   LOGIN: 'auth.login',
   ME: 'auth.me',
   CHANGE_PASSWORD: 'auth.change-password',
+  /** Sent by the gateway on every authenticated request: is this login still valid, and with which role? */
+  CHECK_SESSION: 'auth.check-session',
   // Account management, sent by the gateway's employee endpoints.
   CREATE_USER: 'auth.create-user',
   FIND_ACCOUNTS: 'auth.find-accounts',

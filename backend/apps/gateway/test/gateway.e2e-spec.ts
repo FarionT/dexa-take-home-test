@@ -62,6 +62,16 @@ describe('Gateway (e2e)', () => {
   const employeeSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
   const attendanceSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
   let uploadDir: string;
+  // The auth service's view of each login (SessionGuard asks it on every authenticated
+  // request). Tests change an entry to simulate a deletion, deactivation or demotion.
+  let sessions: Map<string, JwtPayload | 'gone'>;
+  const checkSession = vi.fn((payload: unknown): Observable<unknown> => {
+    const userId = typeof payload === 'object' && payload !== null && 'user_id' in payload ? payload.user_id : undefined;
+    const session = typeof userId === 'string' ? sessions.get(userId) : undefined;
+    return session && session !== 'gone'
+      ? of(session)
+      : throwError(() => ({ status_code: 401, message: 'Your session is no longer valid. Please log in again.' }));
+  });
 
   beforeAll(async () => {
     process.env.JWT_SECRET = SECRET;
@@ -76,6 +86,11 @@ describe('Gateway (e2e)', () => {
   });
 
   beforeEach(async () => {
+    sessions = new Map<string, JwtPayload | 'gone'>([
+      [EMPLOYEE.sub, EMPLOYEE],
+      [ADMIN.sub, ADMIN],
+    ]);
+    checkSession.mockClear();
     employeeSend.mockReset().mockImplementation((pattern) =>
       pattern === EMPLOYEE_PATTERNS.PING ? of(createPing('employee', 'up')) : throwError(() => new Error(`unexpected ${pattern}`)),
     );
@@ -87,7 +102,11 @@ describe('Gateway (e2e)', () => {
     );
     const module = await Test.createTestingModule({ imports: [GatewayModule], controllers: [ProbeController] })
       .overrideProvider(SERVICE_CLIENTS.auth)
-      .useValue({ send: authSend })
+      .useValue({
+        // Session checks get their own fake, so tests that queue auth replies aren't affected.
+        send: (pattern: string, payload: unknown) =>
+          pattern === AUTH_PATTERNS.CHECK_SESSION ? checkSession(payload) : authSend(pattern, payload),
+      })
       .overrideProvider(SERVICE_CLIENTS.employee)
       .useValue({ send: employeeSend })
       .overrideProvider(SERVICE_CLIENTS.attendance)
@@ -212,6 +231,7 @@ describe('Gateway (e2e)', () => {
 
   describe('must_change_password (PasswordChangeGuard)', () => {
     const mustChange: JwtPayload = { ...EMPLOYEE, must_change_password: true };
+    beforeEach(() => sessions.set(EMPLOYEE.sub, mustChange));
 
     it('blocks other endpoints until the password is changed', async () => {
       const res = await http().get('/probe/any').set('Authorization', `Bearer ${await tokenFor(mustChange)}`).expect(403);
@@ -234,6 +254,51 @@ describe('Gateway (e2e)', () => {
         current_password: 'Generated1',
         new_password: 'MyNewPass1',
       });
+    });
+  });
+
+  describe('session check (SessionGuard): the token is still valid, the login has changed', () => {
+    it('asks the auth service on every authenticated request', async () => {
+      await http().get('/probe/any').set('Authorization', `Bearer ${await tokenFor(EMPLOYEE)}`).expect(200);
+      expect(checkSession).toHaveBeenCalledWith({ user_id: EMPLOYEE.sub });
+    });
+
+    it('does not ask for public endpoints', async () => {
+      await http().get('/health').expect(200);
+      expect(checkSession).not.toHaveBeenCalled();
+    });
+
+    it('logs out a deleted or deactivated user at once (401), even with an unexpired token', async () => {
+      const token = await tokenFor(EMPLOYEE);
+      sessions.set(EMPLOYEE.sub, 'gone');
+
+      const res = await http().get('/attendance/me').set('Authorization', `Bearer ${token}`).expect(401);
+
+      expect(res.body).toEqual({ status: 401, message: 'Your session is no longer valid. Please log in again.' });
+      expect(attendanceSend).not.toHaveBeenCalledWith(ATTENDANCE_PATTERNS.LIST_DAYS, expect.anything());
+    });
+
+    it('a deleted HR admin can no longer use HR endpoints', async () => {
+      const token = await tokenFor(ADMIN);
+      sessions.set(ADMIN.sub, 'gone');
+
+      await http().get('/employees').set('Authorization', `Bearer ${token}`).expect(401);
+      expect(employeeSend).not.toHaveBeenCalledWith(EMPLOYEE_PATTERNS.LIST, expect.anything());
+    });
+
+    it('uses the current role: a demoted admin gets 403 on HR endpoints', async () => {
+      const token = await tokenFor(ADMIN); // the token still says ADMIN
+      sessions.set(ADMIN.sub, { ...ADMIN, role: 'EMPLOYEE' });
+
+      const res = await http().get('/probe/admin').set('Authorization', `Bearer ${token}`).expect(403);
+      expect(res.body).toEqual({ status: 403, message: 'You do not have permission to do this.' });
+    });
+
+    it('returns 503 (not a logout) when the auth service is down', async () => {
+      checkSession.mockImplementationOnce(() =>
+        throwError(() => Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' })),
+      );
+      await http().get('/probe/any').set('Authorization', `Bearer ${await tokenFor(EMPLOYEE)}`).expect(503);
     });
   });
 

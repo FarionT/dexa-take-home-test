@@ -4,6 +4,8 @@ import { AUTH_PATTERNS } from '@app/shared';
 import type {
   AuthUser,
   ChangePasswordRequest,
+  CheckSessionRequest,
+  JwtPayload,
   LoginRequest,
   LoginResult,
   MeRequest,
@@ -18,6 +20,11 @@ export class LoginController {
   @MessagePattern(AUTH_PATTERNS.LOGIN)
   login(@Payload() request: LoginRequest): Promise<LoginResult> {
     return this.loginService.login(request);
+  }
+
+  @MessagePattern(AUTH_PATTERNS.CHECK_SESSION)
+  checkSession(@Payload() request: CheckSessionRequest): Promise<JwtPayload> {
+    return this.loginService.checkSession(request);
   }
 
   @MessagePattern(AUTH_PATTERNS.ME)

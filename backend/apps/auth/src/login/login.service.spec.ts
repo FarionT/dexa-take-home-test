@@ -124,6 +124,31 @@ describe('LoginService', () => {
     });
   });
 
+  describe('checkSession', () => {
+    it("returns the user's current claims from the database, not the token's", async () => {
+      users.findByPk.mockResolvedValue(await fakeUser({ role: 'EMPLOYEE', must_change_password: true }));
+
+      expect(await service.checkSession({ user_id: 'user-1' })).toEqual({
+        sub: 'user-1',
+        employee_id: 'emp-1',
+        role: 'EMPLOYEE',
+        must_change_password: true,
+      });
+    });
+
+    it.each([
+      ['deleted', null],
+      ['deactivated', { is_active: false }],
+    ])('rejects a %s user with 401', async (_label, state) => {
+      users.findByPk.mockResolvedValue(state && (await fakeUser(state)));
+
+      expect(await rpcErrorOf(service.checkSession({ user_id: 'user-1' }))).toEqual({
+        status_code: 401,
+        message: 'Your session is no longer valid. Please log in again.',
+      });
+    });
+  });
+
   describe('me', () => {
     it('returns the user without the password hash', async () => {
       users.findByPk.mockResolvedValue(await fakeUser());

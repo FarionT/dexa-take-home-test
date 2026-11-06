@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module.js';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
+import { SessionGuard } from './auth/guards/session.guard.js';
+import { ServiceClientsModule } from './clients/service-clients.module.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
 import { EmployeesModule } from './employees/employees.module.js';
 import { ResponseEnvelopeInterceptor } from './common/response-envelope.interceptor.js';
@@ -22,6 +24,8 @@ import { HealthModule } from './health/health.module.js';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({ secret: getJwtSecret(config) }),
     }),
+    // TCP clients for SessionGuard (feature modules import their own).
+    ServiceClientsModule,
     HealthModule,
     AuthModule,
     EmployeesModule,
@@ -36,8 +40,10 @@ import { HealthModule } from './health/health.module.js';
     // Every response, success or error, is { status, message, data? }.
     { provide: APP_INTERCEPTOR, useClass: ResponseEnvelopeInterceptor },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
-    // Global guards, run in this order: who are you -> password change pending? -> allowed role?
+    // Global guards, run in this order:
+    // valid token? -> login still active (current role)? -> password change pending? -> allowed role?
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: SessionGuard },
     { provide: APP_GUARD, useClass: PasswordChangeGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],

@@ -261,10 +261,21 @@ These apply to every endpoint in the API, not only `/auth/*`. Checked in this or
 | # | Check | Failure |
 |---|-------|---------|
 | 1 | Valid `Authorization: Bearer <token>` (signature, expiry, claims) | `401` |
-| 2 | If `must_change_password` is `true`, only `/auth/me` and `/auth/change-password` are allowed | `403 Please change your password before continuing.` |
-| 3 | The endpoint's required role. `ADMIN` passes `EMPLOYEE` checks too | `403 You do not have permission to do this.` |
+| 2 | **The login still exists and is active.** The gateway asks the auth service (`auth.check-session`) on every request and from then on uses the user's **current** role and password state, not the ones in the token | `401 Your session is no longer valid. Please log in again.` (`503` if the auth service is down) |
+| 3 | If `must_change_password` is `true`, only `/auth/me` and `/auth/change-password` are allowed | `403 Please change your password before continuing.` |
+| 4 | The endpoint's required role (the current one, from step 2). `ADMIN` passes `EMPLOYEE` checks too | `403 You do not have permission to do this.` |
 
-Public endpoints (`POST /auth/login`, `GET /health`) skip all three.
+Public endpoints (`POST /auth/login`, `GET /health`) skip all four.
+
+What step 2 means in practice, while the user still has an unexpired token:
+
+| HR does | The user's next request |
+|---------|-------------------------|
+| Deletes the employee | `401`: the frontend logs them out |
+| Sets the employee `INACTIVE` | `401`: the frontend logs them out |
+| Demotes an `ADMIN` to `EMPLOYEE` | HR endpoints give `403`; employee endpoints keep working |
+| Promotes an `EMPLOYEE` to `ADMIN` | HR endpoints work at once (the frontend shows HR pages after the next page load) |
+| Resets their password | Every endpoint except `/auth/me` and `/auth/change-password` gives `403 Please change your password before continuing.` until they change it with the new temporary password |
 
 ## Flows
 
@@ -289,7 +300,7 @@ replace the stored token with the new one → normal use
 
 ### Logout
 
-Tokens are stateless, so logout is client-side: delete the stored token. A token stays valid until `exp`. See [Known limitations](#known-limitations).
+Logout is client-side: delete the stored token. A copied token stays usable until `exp` as long as the login is still active (see [Known limitations](#known-limitations)); deleting or deactivating the login ends it at once.
 
 ## Security notes
 
@@ -300,9 +311,9 @@ Tokens are stateless, so logout is client-side: delete the stored token. A token
 
 ## Known limitations
 
-- **No token revocation**: a token stays valid until it expires (`JWT_EXPIRES_IN`, default 1 day), even after logout. Deactivation is checked by `GET /auth/me` and `POST /auth/change-password`, but other endpoints rely on the token alone. Production would use short-lived tokens plus refresh tokens.
+- **No per-token revocation**: deleting, deactivating or demoting a login takes effect at once (step 2 above), but logging out only deletes the token in the browser. A copy of the token keeps working until it expires (`JWT_EXPIRES_IN`, default 1 day) while the login stays active. Production would add short-lived tokens with refresh tokens, or a token version per user.
+- **One extra service call per request**: step 2 costs one TCP message and one primary-key lookup in `dexa_auth` per authenticated request, and the auth service being down makes every endpoint answer `503`. Fine at this scale; a large system would cache the answer for a few seconds.
 - **No login rate limiting yet**: repeated wrong passwords are only slowed by bcrypt. Production would add `@nestjs/throttler` or similar on `POST /auth/login`.
-- **Role changes apply at the next login**: the role is copied into the token when it is issued.
 
 ## TypeScript types (for the frontend)
 

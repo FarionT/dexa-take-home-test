@@ -33,7 +33,7 @@ The employee always comes from the token, and the time is always the server's: n
 | Check-out: only after a check-in on the **same** working day | `400 You have not checked in today` |
 | Check-out: at most once per day | `409 You have already checked out today` |
 | Both need a photo: JPEG, PNG or WebP, at most `UPLOAD_MAX_SIZE_MB` (default 5 MB). The type is read from the file's bytes, not from its name or `Content-Type` | `400` / `413` |
-| The employee must be `ACTIVE`. A deactivated employee's token can still be valid until it expires, so this is checked on every check-in / check-out | `403 Your employee record is inactive. Please contact HR.` |
+| The employee must be `ACTIVE`. A deactivated or deleted login is already refused on every request (`401`, see [Auth API → Rules](auth.md#rules-for-all-protected-endpoints)); check-in / check-out also check the employee record itself | `403 Your employee record is inactive. Please contact HR.` |
 
 A check-in at 23:00 and a check-out at 01:00 the next day are on two different working days: the check-out is refused. Night shifts are out of scope for this test.
 
@@ -356,7 +356,7 @@ An `<img src>` can't send the token, so the frontend fetches the photo with the 
 
 ```
 browser ──multipart──▶ gateway :3000                                  attendance :3003
-                        1. JwtAuthGuard / PasswordChangeGuard / RolesGuard
+                        1. JwtAuthGuard / SessionGuard / PasswordChangeGuard / RolesGuard
                         2. multer reads the file into memory (413 if too big)
                         3. PhotoFilePipe: file present? real JPEG/PNG/WebP?
                         4. employee.find-one ──TCP──▶ employee :3002 (ACTIVE?)

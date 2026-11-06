@@ -127,7 +127,7 @@ curl -s -X POST localhost:3000/auth/login -H 'Content-Type: application/json' \
 
 ## Protecting an endpoint (gateway)
 
-Three global guards run on every request, in this order: `JwtAuthGuard` (valid token?) → `PasswordChangeGuard` (password change pending?) → `RolesGuard` (allowed role?). Use the decorators from `apps/gateway/src/auth/auth.decorators.ts`:
+Four global guards run on every request, in this order: `JwtAuthGuard` (valid token?) → `SessionGuard` (login still active? asks the auth service and swaps in the **current** role) → `PasswordChangeGuard` (password change pending?) → `RolesGuard` (allowed role?). Use the decorators from `apps/gateway/src/auth/auth.decorators.ts`:
 
 | Decorator | Effect |
 |-----------|--------|
@@ -136,7 +136,7 @@ Three global guards run on every request, in this order: `JwtAuthGuard` (valid t
 | `@Roles('EMPLOYEE')` | employees **and** HR (ADMIN includes EMPLOYEE) |
 | `@Public()` | no token needed |
 | `@AllowDuringPasswordChange()` | still reachable while `must_change_password` is true |
-| `@CurrentUser() user: JwtPayload` | parameter: the caller's token claims (`user.sub`, `user.employee_id`, `user.role`) |
+| `@CurrentUser() user: JwtPayload` | parameter: the caller's current claims (`user.sub`, `user.employee_id`, `user.role`), as confirmed by `SessionGuard` |
 
 Always take the user / employee id from `@CurrentUser()`, never from the request body or URL.
 
