@@ -52,7 +52,7 @@ The second request waits for the first to commit, then sees one admin left and i
 
 **What counts as removing an admin** (all go through rules 2 and 3): changing `role` to `EMPLOYEE`, setting the employee `INACTIVE` (which sets `users.is_active = FALSE`), and soft-deleting the employee (which soft-deletes the user).
 
-**Not covered here** (production extras, out of scope): a separate super-admin role, or a second person approving role changes. A demoted or deactivated admin's current JWT keeps working until it expires (see the known limitation under [Cross-database rules](#cross-database-rules)).
+**Not covered here** (production extras, out of scope): a separate super-admin role, or a second person approving role changes. A demotion, deactivation or deletion applies to the user's very next request: the gateway checks the login with the auth service on every request (see [Cross-database rules](#cross-database-rules)).
 
 ## Relationships
 
@@ -276,7 +276,7 @@ One row per clock event, with a photo as proof of working from home. No flow edi
 | Check-out: only after a check-in on the **same** day | `400 Bad Request`: not checked in today |
 | Check-out: at most once per day | `409 Conflict`: already checked out today |
 | Both need a photo (JPEG / PNG / WebP by file signature, at most `UPLOAD_MAX_SIZE_MB`) | `400 Bad Request` / `413 Payload Too Large` (gateway) |
-| The employee must be `ACTIVE` (checked by the gateway with `employee.find-one`, because a token stays valid until it expires) | `403 Forbidden` (gateway) |
+| The employee must be `ACTIVE` (checked by the gateway with `employee.find-one`; `SessionGuard` already rejects a deactivated login, this also covers the employee record itself) | `403 Forbidden` (gateway) |
 
 The day rules are checked by the attendance service with a plain read before the insert; the unique key is the real guarantee when two requests arrive at once (the loser gets `409`). API details: [docs/api/attendance.md](api/attendance.md).
 
@@ -330,7 +330,7 @@ If an undo step itself fails, the gateway logs `MANUAL FIX NEEDED: …` with the
 
 **HR attendance view** (`GET /attendance`) joins data from two services: if HR filters by department or name, the gateway first gets the matching ids (`employee.find-ids`); the attendance service returns one page of days; then the gateway fetches those employees' names in one batch (`employee.find-by-ids`) and merges them. Both lookups include soft-deleted employees (`paranoid: false`). Names are not copied into `attendances`, so they never go stale. The department filter uses the employee's current department. The id list grows with the number of matching employees, which is fine at this scale; a large company would need a reporting copy of the data instead.
 
-**Known limitation**: an existing JWT keeps its role and active state until it expires (`JWT_EXPIRES_IN`), so a deactivated employee's current token still works until then. Shorter tokens with refresh tokens would fix this; out of scope for this test.
+**Tokens vs. the current state**: a JWT is signed at login and stays valid until it expires (`JWT_EXPIRES_IN`), but the role and active state inside it can become outdated. So the gateway's `SessionGuard` asks the auth service (`auth.check-session`) on every authenticated request: a deleted or deactivated login gets `401` at once, and the **current** role and `must_change_password` from `users` replace the token's. Cost: one primary-key lookup per request.
 
 ## Photo storage
 

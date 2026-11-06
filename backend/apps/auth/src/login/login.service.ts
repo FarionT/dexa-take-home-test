@@ -6,6 +6,7 @@ import { normalizeEmail, rpcError } from '@app/shared';
 import type {
   AuthUser,
   ChangePasswordRequest,
+  CheckSessionRequest,
   JwtPayload,
   LoginRequest,
   LoginResult,
@@ -49,6 +50,15 @@ export class LoginService {
     return this.issueToken(user);
   }
 
+  /**
+   * The gateway asks this on every authenticated request. A valid signature
+   * only proves who issued the token; this says whether the login still exists,
+   * is active, and which role and password state it has right now.
+   */
+  async checkSession(request: CheckSessionRequest): Promise<JwtPayload> {
+    return toClaims(await this.findActiveUser(request.user_id));
+  }
+
   async me(request: MeRequest): Promise<AuthUser> {
     return toAuthUser(await this.findActiveUser(request.user_id));
   }
@@ -82,13 +92,7 @@ export class LoginService {
   }
 
   private async issueToken(user: User): Promise<LoginResult> {
-    const payload: JwtPayload = {
-      sub: user.id,
-      employee_id: user.employee_id,
-      role: user.role,
-      must_change_password: user.must_change_password,
-    };
-    const accessToken = await this.jwt.signAsync(payload, { expiresIn: this.tokenLifetimeSeconds });
+    const accessToken = await this.jwt.signAsync(toClaims(user), { expiresIn: this.tokenLifetimeSeconds });
     return {
       access_token: accessToken,
       token_type: 'Bearer',
@@ -96,6 +100,16 @@ export class LoginService {
       user: toAuthUser(user),
     };
   }
+}
+
+/** The JWT claims of a user; also the reply of check-session. */
+function toClaims(user: User): JwtPayload {
+  return {
+    sub: user.id,
+    employee_id: user.employee_id,
+    role: user.role,
+    must_change_password: user.must_change_password,
+  };
 }
 
 /** The public shape of a user: never includes password_hash. */

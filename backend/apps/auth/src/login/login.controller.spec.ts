@@ -7,6 +7,7 @@ import { LoginService } from './login.service.js';
 describe('LoginController', () => {
   let controller: LoginController;
   const service = {
+    checkSession: vi.fn(),
     login: vi.fn(),
     me: vi.fn(),
     changePassword: vi.fn(),
@@ -20,6 +21,12 @@ describe('LoginController', () => {
     }).compile();
 
     controller = module.get(LoginController);
+  });
+
+  it('forwards check-session', async () => {
+    service.checkSession.mockResolvedValue('claims');
+    expect(await controller.checkSession({ user_id: 'user-1' })).toBe('claims');
+    expect(service.checkSession).toHaveBeenCalledWith({ user_id: 'user-1' });
   });
 
   it('forwards login, me and change-password payloads', async () => {

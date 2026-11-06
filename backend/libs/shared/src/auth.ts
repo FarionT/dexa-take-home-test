@@ -60,6 +60,15 @@ export interface MeRequest {
   user_id: string;
 }
 
+/**
+ * Reply: the user's claims as they are NOW in the database (same shape as the
+ * JWT), or 401 if the login was deleted or deactivated. The gateway uses these
+ * instead of the token's, so a demotion or deletion takes effect at once.
+ */
+export interface CheckSessionRequest {
+  user_id: string;
+}
+
 export interface ChangePasswordRequest {
   user_id: string;
   current_password: string;
