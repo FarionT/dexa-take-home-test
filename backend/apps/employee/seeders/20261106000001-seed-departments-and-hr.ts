@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { QueryInterface } from 'sequelize';
 
 // sequelize-cli calls up/down with (queryInterface, Sequelize module).
@@ -7,18 +8,15 @@ type SequelizeModule = typeof import('sequelize');
  * Seeds 3 departments and the first HR employee (who gets the ADMIN login in
  * apps/auth/seeders/20261106000001-seed-hr-admin.ts).
  *
- * Fixed IDs: the auth seeder links the login to SEED_HR_EMPLOYEE_ID without
- * reading this database (one database per service). Keep both files in sync.
- * Safe to run again: existing rows are skipped. Runs on plain Node, so values
- * are written out here instead of imported from app code.
+ * Every row gets a new random id, like rows created through the app (a
+ * well-known admin id in the repo would make forged tokens easier). Rows are
+ * matched by their natural key instead: departments by name, the HR employee
+ * by SEED_ADMIN_EMAIL (the auth seeder finds it the same way). Safe to run
+ * again: existing rows are skipped.
+ * Runs on plain Node, so values are written out here instead of imported from app code.
  */
-const DEPARTMENTS = [
-  { id: 'd0000000-0000-4000-8000-000000000001', name: 'Human Resources' },
-  { id: 'd0000000-0000-4000-8000-000000000002', name: 'Engineering' },
-  { id: 'd0000000-0000-4000-8000-000000000003', name: 'Finance' },
-];
+const DEPARTMENT_NAMES = ['Human Resources', 'Engineering', 'Finance'];
 const HR_DEPARTMENT_NAME = 'Human Resources';
-const SEED_HR_EMPLOYEE_ID = 'e0000000-0000-4000-8000-000000000001';
 const SEED_HR_POSITION = 'HR Manager';
 
 function requireEnv(name: string): string {
@@ -50,27 +48,22 @@ export async function up(qi: QueryInterface, Sequelize: SequelizeModule): Promis
       'SELECT `name` FROM `departments` WHERE `deleted_at` IS NULL',
       { type: QueryTypes.SELECT, transaction },
     );
-    const missing = DEPARTMENTS.filter((d) => !existing.some((e) => e.name === d.name));
+    const missing = DEPARTMENT_NAMES.filter((name) => !existing.some((e) => e.name === name));
     if (missing.length > 0) {
       await qi.bulkInsert(
         'departments',
-        missing.map((d) => ({ ...d, created_at: now, updated_at: now })),
+        missing.map((name) => ({ id: randomUUID(), name, created_at: now, updated_at: now })),
         { transaction },
       );
     }
 
-    // 2. HR employee: skip if already seeded; refuse if the email belongs to someone else,
-    //    because the auth seeder would then link the admin login to the wrong employee.
+    // 2. HR employee: skip if a live employee already has the seed email (seeded before,
+    //    or created through the app). The auth seeder links the admin login to that employee.
     const [current] = await sequelize.query<{ id: string }>(
-      'SELECT `id` FROM `employees` WHERE (`id` = ? OR `email` = ?) AND `deleted_at` IS NULL',
-      { replacements: [SEED_HR_EMPLOYEE_ID, email], type: QueryTypes.SELECT, transaction },
+      'SELECT `id` FROM `employees` WHERE `email` = ? AND `deleted_at` IS NULL',
+      { replacements: [email], type: QueryTypes.SELECT, transaction },
     );
-    if (current) {
-      if (current.id !== SEED_HR_EMPLOYEE_ID) {
-        throw new Error(`${email} already belongs to another employee. Use a different SEED_ADMIN_EMAIL.`);
-      }
-      return;
-    }
+    if (current) return;
 
     const [hrDepartment] = await sequelize.query<{ id: string }>(
       'SELECT `id` FROM `departments` WHERE `name` = ? AND `deleted_at` IS NULL',
@@ -94,7 +87,7 @@ export async function up(qi: QueryInterface, Sequelize: SequelizeModule): Promis
       'employees',
       [
         {
-          id: SEED_HR_EMPLOYEE_ID,
+          id: randomUUID(),
           employee_code: formatEmployeeCode(number),
           full_name: fullName,
           email,
@@ -120,6 +113,7 @@ export async function up(qi: QueryInterface, Sequelize: SequelizeModule): Promis
  * RESTRICT). The employee code stays used: codes are never handed out twice.
  */
 export async function down(qi: QueryInterface): Promise<void> {
-  await qi.bulkDelete('employees', { id: SEED_HR_EMPLOYEE_ID });
-  await qi.bulkDelete('departments', { id: DEPARTMENTS.map((d) => d.id) });
+  // The id is random, so the seeded employee is found by its email.
+  await qi.bulkDelete('employees', { email: requireEnv('SEED_ADMIN_EMAIL').toLowerCase() });
+  await qi.bulkDelete('departments', { name: DEPARTMENT_NAMES });
 }

@@ -7,7 +7,7 @@ import type { CreatedEmployee } from '../../types/employee'
 import type { EmployeeFormField, EmployeeFormValues } from '../../utils/employee-form'
 import { emptyEmployeeForm, employeeFormErrors, toCreateRequest } from '../../utils/employee-form'
 import type { FormErrors } from '../../utils/form-errors'
-import { todayIsoDate } from '../../utils/format'
+import { todayWib } from '../../utils/format'
 
 const NO_ERRORS: FormErrors<EmployeeFormField> = { fields: {}, form: null }
 
@@ -15,7 +15,7 @@ const NO_ERRORS: FormErrors<EmployeeFormField> = { fields: {}, form: null }
 export function EmployeeCreatePage() {
   const navigate = useNavigate()
   const departments = useRequest('departments', listDepartments)
-  const [initialValues] = useState(() => emptyEmployeeForm(todayIsoDate()))
+  const [initialValues] = useState(() => emptyEmployeeForm(todayWib()))
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState(NO_ERRORS)
   const [created, setCreated] = useState<CreatedEmployee | null>(null)

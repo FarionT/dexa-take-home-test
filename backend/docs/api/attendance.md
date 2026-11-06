@@ -261,7 +261,7 @@ curl -s "http://localhost:3000/attendance/me?date_from=2026-11-01&date_to=2026-1
 | `limit` | `10` | Whole number 1–100. Counts days |
 
 ```bash
-curl -s "http://localhost:3000/attendance?date_from=2026-11-01&date_to=2026-11-30&department_id=d0000000-0000-4000-8000-000000000002&search=budi" \
+curl -s "http://localhost:3000/attendance?date_from=2026-11-01&date_to=2026-11-30&department_id=7e2b4d6f-1a3c-4e5b-8d7f-9a0b1c2d3e4f&search=budi" \
   -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -283,7 +283,7 @@ curl -s "http://localhost:3000/attendance?date_from=2026-11-01&date_to=2026-11-3
           "id": "d0c05509-fcfd-4041-a6bf-1a2121e13929",
           "employee_code": "EMP-0002",
           "full_name": "Budi Santoso",
-          "department": { "id": "d0000000-0000-4000-8000-000000000002", "name": "Engineering" },
+          "department": { "id": "7e2b4d6f-1a3c-4e5b-8d7f-9a0b1c2d3e4f", "name": "Engineering" },
           "status": "ACTIVE",
           "is_deleted": false
         }

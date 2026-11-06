@@ -38,11 +38,11 @@ Any endpoint marked ADMIN returns `403 You do not have permission to do this.` f
   "email": "budi@dexa.local",
   "phone": "+62 812-3456-7890",
   "position": "Developer",
-  "department": { "id": "d0000000-0000-4000-8000-000000000002", "name": "Engineering" },
+  "department": { "id": "7e2b4d6f-1a3c-4e5b-8d7f-9a0b1c2d3e4f", "name": "Engineering" },
   "hire_date": "2026-11-10",
   "status": "ACTIVE",
-  "created_by": "e0000000-0000-4000-8000-000000000001",
-  "updated_by": "e0000000-0000-4000-8000-000000000001",
+  "created_by": "9b1f4c2e-7d3a-4e8b-a6c5-2f0e1d9c8b7a",
+  "updated_by": "9b1f4c2e-7d3a-4e8b-a6c5-2f0e1d9c8b7a",
   "created_at": "2026-11-06T09:12:30.000Z",
   "updated_at": "2026-11-06T09:12:30.000Z",
   "account": {
@@ -84,7 +84,7 @@ The login side of an employee. Never contains a password or hash.
 
 ### Department object
 
-`{ "id": "d0000000-0000-4000-8000-000000000002", "name": "Engineering" }`
+`{ "id": "7e2b4d6f-1a3c-4e5b-8d7f-9a0b1c2d3e4f", "name": "Engineering" }`
 
 ---
 
@@ -97,9 +97,9 @@ The login side of an employee. Never contains a password or hash.
   "status": 200,
   "message": "Departments",
   "data": [
-    { "id": "d0000000-0000-4000-8000-000000000002", "name": "Engineering" },
-    { "id": "d0000000-0000-4000-8000-000000000003", "name": "Finance" },
-    { "id": "d0000000-0000-4000-8000-000000000001", "name": "Human Resources" }
+    { "id": "7e2b4d6f-1a3c-4e5b-8d7f-9a0b1c2d3e4f", "name": "Engineering" },
+    { "id": "c4d5e6f7-8a9b-4c0d-9e1f-2a3b4c5d6e7f", "name": "Finance" },
+    { "id": "3a7c9e1b-5d2f-4b8a-9c6e-0f1d2e3a4b5c", "name": "Human Resources" }
   ]
 }
 ```
@@ -180,7 +180,7 @@ curl -s "http://localhost:3000/employees?page=1&limit=10&search=budi&status=ACTI
   "email": "budi@dexa.local",
   "phone": "+62 812-3456-7890",
   "position": "Developer",
-  "department_id": "d0000000-0000-4000-8000-000000000002",
+  "department_id": "7e2b4d6f-1a3c-4e5b-8d7f-9a0b1c2d3e4f",
   "hire_date": "2026-11-10",
   "role": "EMPLOYEE"
 }
