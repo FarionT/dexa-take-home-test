@@ -23,6 +23,8 @@ Log in with the seeded HR admin (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in `
 | `/login` | logged out | Log in. Logged-in users are sent on |
 | `/change-password` | logged in | Change password. **Forced** while `must_change_password` is true (temporary password from HR): every other page redirects here |
 | `/` | logged in | Home: greeting by name, role, and the tools for that role |
+| `/attendance` | logged in (HR too) | WFH attendance: today's check-in / check-out with a **camera photo** and optional notes, then your own history (one row per day, date filter, photos) |
+| `/monitoring` | HR | Everyone's attendance, **read only**: today by default, date range, department and search filters, each person's check-in / check-out photos. Only employees who checked in are listed |
 | `/employees` | HR (ADMIN) | Employee list: search (name, code, email), department and status filters, pages. Filters live in the URL |
 | `/employees/new` | HR | Add an employee (their login is created too). The temporary password is shown **once** in a dialog |
 | `/employees/:id` | HR | Profile and login account, with actions: reset password, make/remove HR admin, deactivate (left), reactivate (rehire, new temporary password), delete (mistakes only). Hidden on your own record |
@@ -39,9 +41,11 @@ src/
 ├── types/                API types (snake_case, mirroring backend/docs/api/*.md) + runtime type guards
 ├── services/
 │   ├── http.ts           axios instance (base URL, timeout, token + 401 interceptors) and request():
-│   │                     unwraps { status, message, data }, checks it, throws ApiError
+│   │                     unwraps { status, message, data }, checks it, throws ApiError;
+│   │                     requestBlob() for file downloads (attendance photos)
 │   ├── auth.service.ts   login, fetchCurrentUser, changePassword
 │   ├── employee.service.ts  departments, employees CRUD, reset password, my profile
+│   ├── attendance.service.ts  check-in / check-out (multipart), today, my history, HR list, photo download
 │   └── token-storage.ts  token in localStorage (+ in-memory copy), expiry from the token
 ├── auth/
 │   ├── AuthProvider.tsx  session state: restore on load, login, logout, change password, auto-logout
@@ -52,14 +56,16 @@ src/
 ├── components/
 │   ├── index.ts          re-exports every component: import { Button, Alert } from '../../components'
 │   └── <Name>/           one folder per component: <Name>.tsx, index.ts (+ <Name>.scss only if needed)
-│                         Alert, AppLayout (header + nav for logged-in pages), AuthLayout, Badge, Brand,
-│                         Button (+ buttonClasses for links), Dialog (native <dialog>), EmployeeForm,
-│                         FullPageMessage, Pagination, SelectField, Spinner, TemporaryPasswordNotice, TextField
+│                         Alert, AppLayout (header + nav for logged-in pages), AttendancePhoto (loads a photo
+│                         with the token), AttendancePhotosDialog, AuthLayout, Badge, Brand, Button
+│                         (+ buttonClasses for links), CameraCapture (browser camera + upload fallback),
+│                         DayStatusBadge, Dialog (native <dialog>), EmployeeForm, FullPageMessage, Pagination,
+│                         SelectField, Spinner, TemporaryPasswordNotice, TextField
 ├── pages/
 │   ├── index.ts          re-exports every page (used by App.tsx)
 │   └── <Name>Page/       one folder per page: <Name>Page.tsx, index.ts (+ .scss only if needed)
-├── utils/                cx(), form errors, employee form rules, date formatting, labels, password rules,
-│                         router state readers
+├── utils/                cx(), attendance (photo limits, next action, day status), form errors, employee
+│                         form rules, date/time formatting (always WIB), labels, password rules, router state readers
 └── index.css             Tailwind entry + design tokens (the only .css file)
 ```
 
@@ -69,7 +75,17 @@ src/
 - **Page reload**: the stored token is checked with `GET /auth/me`. If the server is unreachable, the app shows "Can't reach the server" with a retry button and keeps the token, so a backend outage doesn't log anyone out.
 - **Logout** happens on: the Log out button, any `401` on a request that carried the token (session revoked, user deactivated, token invalid), or the token's expiry time (a timer).
 - **Temporary passwords**: after login with `must_change_password: true`, every page redirects to `/change-password`. Changing it returns a new token without the flag.
+- **Account changes apply at once**: the backend checks the login on every request, so if HR deletes or deactivates a logged-in user, their next request gets `401` and they are logged out. A demoted HR admin gets `403` on HR pages right away (the menu updates on the next page load).
 - **The backend is the real lock.** Route guards only decide what to show; the backend checks the token and role on every request.
+
+## Attendance and photos
+
+- **Camera first**: `CameraCapture` uses the browser camera (`navigator.mediaDevices.getUserMedia`). The user clicks *Turn on camera*, sees a mirrored live preview, and *Take photo* saves the current frame as a JPEG (not mirrored). *Retake* starts the camera again.
+- **Upload only as a fallback**: *Upload a photo* appears only when the camera can't be used, each case with its own message: no camera found, access blocked (with *Try the camera again*), camera busy in another app, or no camera API. The file must be JPEG, PNG or WebP and at most 5 MB (checked here to fail fast; the backend checks the real file bytes again).
+- **HTTPS or localhost is required for the camera**: browsers hide the camera API on plain `http://` (except `localhost`), so a deployment without HTTPS would only offer the upload.
+- **Photos are loaded with the token**: the photo endpoint needs `Authorization`, which an `<img src>` can't send. `AttendancePhoto` downloads it with `requestBlob()` and shows it from an object URL, loaded only when the photos dialog opens.
+- **Times are in WIB**: the working day and every time on screen follow Asia/Jakarta (the same day the backend counts in), always labelled `WIB`, whatever the viewer's own time zone. See `utils/format.ts`.
+- **The next action comes from the server**: `GET /attendance/me/today` decides whether the page shows *Check in*, *Check out* or "You're done for today", so the page is right even after a check-in in another tab.
 
 ## Conventions
 
