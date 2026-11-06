@@ -62,7 +62,7 @@ Stop MySQL with `docker compose down` (data is kept).
 
 ## API
 
-Full reference per feature in [`docs/api/`](docs/api/): [auth](docs/api/auth.md), [employees](docs/api/employees.md).
+Full reference per feature in [`docs/api/`](docs/api/): [auth](docs/api/auth.md), [employees](docs/api/employees.md), [attendance](docs/api/attendance.md).
 
 All requests go to the gateway (`http://localhost:3000`). Every endpoint needs `Authorization: Bearer <access_token>` unless marked public.
 
@@ -80,10 +80,17 @@ All requests go to the gateway (`http://localhost:3000`). Every endpoint needs `
 | PATCH | `/employees/:id` | ADMIN | any employee fields, `status`, `role` | `data`: `{ employee, temporary_password }` (only on reactivation) |
 | POST | `/employees/:id/reset-password` | ADMIN | — | `data`: `{ temporary_password }` |
 | DELETE | `/employees/:id` | ADMIN | — | soft delete (mistakes only) |
+| POST | `/attendance/check-in` | any logged-in user | multipart: `photo` (file), `notes?` | `data`: the check-in |
+| POST | `/attendance/check-out` | any logged-in user | multipart: `photo` (file), `notes?` | `data`: the check-out |
+| GET | `/attendance/me/today` | any logged-in user | — | `data`: today's `{ check_in, check_out, work_minutes }` |
+| GET | `/attendance/me` | any logged-in user | query: `page, limit, date_from, date_to` | `data`: `{ items, meta }`, one item per day |
+| GET | `/attendance` | ADMIN | query: `date_from, date_to, department_id, search, page, limit` (today by default) | `data`: `{ items, meta }`, everyone's days with `employee`, read only |
+| GET | `/attendance/:id/photo` | owner or ADMIN | — | the image itself (not JSON) |
 
 - Passwords are hashed with **bcrypt** (`bcryptjs`, cost 12). They must be 8–72 bytes and contain a letter and a number (72 bytes is bcrypt's limit; longer passwords are rejected, not cut).
 - A wrong email and a wrong password give the same `401 Invalid email or password`, and take about the same time.
 - A user with a system-generated password (`must_change_password: true`) can only call `/auth/me` and `/auth/change-password` until they change it (`403` elsewhere).
+- Attendance photos are saved under `UPLOAD_DIR` (default `./uploads`, git-ignored) and are served only through `/attendance/:id/photo`, never as public files.
 - **Every response** is `{ "status": 200, "message": "…", "data": … }`: `status` repeats the HTTP code, `data` is left out when empty. Validation errors are `400` with `"message": "Validation failed"` and the problems in `data.errors`. A service that is down gives `503`.
 
 Try it with the seeded HR admin (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` from `.env`):

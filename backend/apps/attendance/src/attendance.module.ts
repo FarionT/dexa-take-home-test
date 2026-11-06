@@ -3,6 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { sequelizeOptions } from '@app/shared';
 import { Attendance } from './attendances/attendance.model.js';
+import { AttendancesController } from './attendances/attendances.controller.js';
+import { AttendancesService } from './attendances/attendances.service.js';
 import { AttendanceController } from './attendance.controller.js';
 import { AttendanceService } from './attendance.service.js';
 
@@ -17,7 +19,7 @@ import { AttendanceService } from './attendance.service.js';
     }),
     SequelizeModule.forFeature([Attendance]),
   ],
-  controllers: [AttendanceController],
-  providers: [AttendanceService],
+  controllers: [AttendanceController, AttendancesController],
+  providers: [AttendanceService, AttendancesService],
 })
 export class AttendanceModule {}

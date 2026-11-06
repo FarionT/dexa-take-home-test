@@ -8,6 +8,9 @@ import type {
   CreateEmployeeRequest,
   DeleteEmployeeRequest,
   EmployeeChanges,
+  EmployeeSummary,
+  FindEmployeeIdsRequest,
+  FindEmployeesByIdsRequest,
   EmployeeListResult,
   EmployeeRecord,
   FindEmployeeRequest,
@@ -15,6 +18,7 @@ import type {
   UpdateEmployeeRequest,
   UpdateEmployeeResult,
 } from '@app/shared';
+import type { EmployeeStatus } from '@app/shared';
 import { Department } from '../departments/department.model.js';
 import { EmployeeCodeService } from './employee-code.service.js';
 import { Employee } from './employee.model.js';
@@ -70,22 +74,8 @@ export class EmployeesService {
   }
 
   async list({ page, limit, search, department_id, status }: ListEmployeesRequest): Promise<EmployeeListResult> {
-    const conditions: WhereOptions<EmployeeAttributes>[] = [];
-    if (status) conditions.push({ status });
-    if (department_id) conditions.push({ department_id });
-    if (search) {
-      const pattern = `%${escapeLike(search.trim())}%`;
-      conditions.push({
-        [Op.or]: [
-          { full_name: { [Op.like]: pattern } },
-          { employee_code: { [Op.like]: pattern } },
-          { email: { [Op.like]: pattern } },
-        ],
-      });
-    }
-
     const { rows, count } = await this.employees.findAndCountAll({
-      where: { [Op.and]: conditions },
+      where: filterOf(search, department_id, status),
       // A department deleted later still shows its name.
       include: [{ model: Department, paranoid: false }],
       // Newest first; id breaks ties so pages never overlap.
@@ -141,6 +131,37 @@ export class EmployeesService {
     return { employee: await this.findOne({ id }), ...result };
   }
 
+  /**
+   * Ids matching HR's attendance filters. Deleted employees are included: their
+   * attendance stays as history and HR may still look for it.
+   */
+  async findIds({ search, department_id }: FindEmployeeIdsRequest): Promise<string[]> {
+    const rows = await this.employees.findAll({
+      attributes: ['id'],
+      where: filterOf(search, department_id),
+      paranoid: false,
+    });
+    return rows.map((row) => row.id);
+  }
+
+  /** Names for a page of attendance rows, in one query. Unknown ids are left out. */
+  async findByIds({ ids }: FindEmployeesByIdsRequest): Promise<EmployeeSummary[]> {
+    if (ids.length === 0) return [];
+    const rows = await this.employees.findAll({
+      where: { id: { [Op.in]: ids } },
+      include: [{ model: Department, paranoid: false }],
+      paranoid: false,
+    });
+    return rows.map((employee) => ({
+      id: employee.id,
+      employee_code: employee.employee_code,
+      full_name: employee.full_name,
+      department: { id: employee.department.id, name: employee.department.name },
+      status: employee.status,
+      is_deleted: employee.deleted_at !== null,
+    }));
+  }
+
   /** Soft delete: the row stays for history; normal queries no longer see it. */
   async delete({ id }: DeleteEmployeeRequest): Promise<{ id: string }> {
     const employee = await this.employees.findByPk(id);
@@ -169,6 +190,24 @@ export class EmployeesService {
       throw error;
     }
   }
+}
+
+/** Shared by the employee list and the attendance filters: same search rules everywhere. */
+function filterOf(search?: string, departmentId?: string, status?: EmployeeStatus): WhereOptions<EmployeeAttributes> {
+  const conditions: WhereOptions<EmployeeAttributes>[] = [];
+  if (status) conditions.push({ status });
+  if (departmentId) conditions.push({ department_id: departmentId });
+  if (search?.trim()) {
+    const pattern = `%${escapeLike(search.trim())}%`;
+    conditions.push({
+      [Op.or]: [
+        { full_name: { [Op.like]: pattern } },
+        { employee_code: { [Op.like]: pattern } },
+        { email: { [Op.like]: pattern } },
+      ],
+    });
+  }
+  return { [Op.and]: conditions };
 }
 
 function toEmployeeRecord(employee: Employee): EmployeeRecord {

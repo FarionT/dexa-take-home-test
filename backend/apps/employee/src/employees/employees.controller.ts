@@ -6,7 +6,10 @@ import type {
   DeleteEmployeeRequest,
   EmployeeListResult,
   EmployeeRecord,
+  EmployeeSummary,
+  FindEmployeeIdsRequest,
   FindEmployeeRequest,
+  FindEmployeesByIdsRequest,
   ListEmployeesRequest,
   UpdateEmployeeRequest,
   UpdateEmployeeResult,
@@ -36,6 +39,16 @@ export class EmployeesController {
   @MessagePattern(EMPLOYEE_PATTERNS.UPDATE)
   update(@Payload() request: UpdateEmployeeRequest): Promise<UpdateEmployeeResult> {
     return this.employeesService.update(request);
+  }
+
+  @MessagePattern(EMPLOYEE_PATTERNS.FIND_IDS)
+  findIds(@Payload() request: FindEmployeeIdsRequest): Promise<string[]> {
+    return this.employeesService.findIds(request);
+  }
+
+  @MessagePattern(EMPLOYEE_PATTERNS.FIND_BY_IDS)
+  findByIds(@Payload() request: FindEmployeesByIdsRequest): Promise<EmployeeSummary[]> {
+    return this.employeesService.findByIds(request);
   }
 
   @MessagePattern(EMPLOYEE_PATTERNS.DELETE)

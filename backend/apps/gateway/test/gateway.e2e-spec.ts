@@ -1,4 +1,7 @@
-import { Controller, Get, Post } from '@nestjs/common';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { Controller, Get, Logger, Post } from '@nestjs/common';
 import type { INestApplication } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
@@ -6,7 +9,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { of, throwError } from 'rxjs';
 import type { Observable } from 'rxjs';
-import { AUTH_PATTERNS, EMPLOYEE_PATTERNS, SERVICE_CLIENTS, createPing } from '@app/shared';
+import { ATTENDANCE_PATTERNS, AUTH_PATTERNS, EMPLOYEE_PATTERNS, SERVICE_CLIENTS, createPing } from '@app/shared';
 import type { JwtPayload } from '@app/shared';
 import { Roles } from '../src/auth/auth.decorators.js';
 import { GatewayModule } from '../src/gateway.module.js';
@@ -57,10 +60,19 @@ describe('Gateway (e2e)', () => {
   // Fake auth service: answers ping by default; each test sets the other replies.
   const authSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
   const employeeSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
-  const servicePing = (key: 'attendance') => ({ send: () => of(createPing(key, 'up')) });
+  const attendanceSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
+  let uploadDir: string;
 
-  beforeAll(() => {
+  beforeAll(async () => {
     process.env.JWT_SECRET = SECRET;
+    // Photos go to a throwaway folder; 0.01 MB (~10 KB) makes the size limit easy to hit.
+    uploadDir = await mkdtemp(path.join(tmpdir(), 'dexa-e2e-uploads-'));
+    process.env.UPLOAD_DIR = uploadDir;
+    process.env.UPLOAD_MAX_SIZE_MB = '0.01';
+  });
+
+  afterAll(async () => {
+    await rm(uploadDir, { recursive: true, force: true });
   });
 
   beforeEach(async () => {
@@ -70,13 +82,16 @@ describe('Gateway (e2e)', () => {
     authSend.mockReset().mockImplementation((pattern) =>
       pattern === AUTH_PATTERNS.PING ? of(createPing('auth', 'up')) : throwError(() => new Error(`unexpected ${pattern}`)),
     );
+    attendanceSend.mockReset().mockImplementation((pattern) =>
+      pattern === ATTENDANCE_PATTERNS.PING ? of(createPing('attendance', 'up')) : throwError(() => new Error(`unexpected ${pattern}`)),
+    );
     const module = await Test.createTestingModule({ imports: [GatewayModule], controllers: [ProbeController] })
       .overrideProvider(SERVICE_CLIENTS.auth)
       .useValue({ send: authSend })
       .overrideProvider(SERVICE_CLIENTS.employee)
       .useValue({ send: employeeSend })
       .overrideProvider(SERVICE_CLIENTS.attendance)
-      .useValue(servicePing('attendance'))
+      .useValue({ send: attendanceSend })
       .compile();
     app = module.createNestApplication();
     await app.init();
@@ -374,6 +389,196 @@ describe('Gateway (e2e)', () => {
 
       const res = await http().delete(`/employees/${EMPLOYEE_RECORD.id}`).set('Authorization', await asAdmin()).expect(200);
       expect(res.body).toEqual({ status: 200, message: 'Employee deleted' });
+    });
+  });
+  describe('attendance', () => {
+    const ATTENDANCE_ID = '3f2a1b0c-9d8e-4f7a-8b6c-5d4e3f2a1b0c';
+    const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
+    const RECORD = {
+      id: ATTENDANCE_ID,
+      employee_id: 'emp-1',
+      type: 'CHECK_IN',
+      attendance_date: '2026-11-06',
+      recorded_at: '2026-11-06T01:05:00.000Z',
+      notes: 'From home',
+      photo: { mime: 'image/jpeg', size: JPEG.length },
+    };
+    const asEmployee = async () => `Bearer ${await tokenFor(EMPLOYEE)}`;
+    const activeEmployee = () => employeeSend.mockReturnValueOnce(of({ id: 'emp-1', status: 'ACTIVE' }));
+    const storedFiles = async () => (await readdir(uploadDir, { recursive: true })).filter((name) => name.endsWith('.jpg'));
+
+    beforeEach(async () => {
+      await rm(path.join(uploadDir, 'attendance'), { recursive: true, force: true });
+    });
+
+    it('POST /attendance/check-in stores the photo and returns 201 with the record', async () => {
+      activeEmployee();
+      attendanceSend.mockReturnValueOnce(of(RECORD));
+
+      const res = await http()
+        .post('/attendance/check-in')
+        .set('Authorization', await asEmployee())
+        .field('notes', '  From home  ')
+        .attach('photo', JPEG, { filename: 'selfie.jpg', contentType: 'image/jpeg' })
+        .expect(201);
+
+      expect(res.body).toEqual({
+        status: 201,
+        message: 'Checked in',
+        data: { ...RECORD, photo: { ...RECORD.photo, url: `/attendance/${ATTENDANCE_ID}/photo` } },
+      });
+      const files = await storedFiles();
+      expect(files).toHaveLength(1);
+      expect(files[0]).not.toContain('selfie'); // the client's file name is never used
+      expect(attendanceSend).toHaveBeenCalledWith(ATTENDANCE_PATTERNS.RECORD, {
+        employee_id: 'emp-1', // from the token
+        type: 'CHECK_IN',
+        photo_path: expect.stringMatching(/^attendance\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.jpg$/),
+        photo_mime: 'image/jpeg',
+        photo_size: JPEG.length,
+        notes: 'From home',
+      });
+    });
+
+    it('requires a photo', async () => {
+      const res = await http().post('/attendance/check-in').set('Authorization', await asEmployee()).field('notes', 'hi').expect(400);
+      expect(res.body).toEqual({ status: 400, message: 'photo is required' });
+    });
+
+    it('rejects a file that only claims to be a JPEG', async () => {
+      const res = await http()
+        .post('/attendance/check-in')
+        .set('Authorization', await asEmployee())
+        .attach('photo', Buffer.from('<html>not an image</html>'), { filename: 'fake.jpg', contentType: 'image/jpeg' })
+        .expect(400);
+      expect(res.body).toEqual({ status: 400, message: 'photo must be a JPEG, PNG or WebP image' });
+      expect(await storedFiles()).toHaveLength(0);
+    });
+
+    it('rejects a photo over UPLOAD_MAX_SIZE_MB with 413', async () => {
+      const big = Buffer.concat([JPEG, Buffer.alloc(20 * 1024)]);
+      const res = await http()
+        .post('/attendance/check-in')
+        .set('Authorization', await asEmployee())
+        .attach('photo', big, { filename: 'big.jpg', contentType: 'image/jpeg' })
+        .expect(413);
+      expect(res.body).toMatchObject({ status: 413 });
+    });
+
+    it('rejects fields other than notes (the time and employee are set by the server)', async () => {
+      const res = await http()
+        .post('/attendance/check-in')
+        .set('Authorization', await asEmployee())
+        .field('recorded_at', '2026-01-01T00:00:00Z')
+        .attach('photo', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' })
+        .expect(400);
+      expect(res.body.data.errors).toContain('property recorded_at should not exist');
+    });
+
+    it('passes the day rule error through and removes the unused photo', async () => {
+      activeEmployee();
+      attendanceSend.mockReturnValueOnce(throwError(() => ({ status_code: 400, message: 'You have not checked in today' })));
+
+      const res = await http()
+        .post('/attendance/check-out')
+        .set('Authorization', await asEmployee())
+        .attach('photo', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' })
+        .expect(400);
+
+      expect(res.body).toEqual({ status: 400, message: 'You have not checked in today' });
+      expect(await storedFiles()).toHaveLength(0);
+    });
+
+    it('needs a token', async () => {
+      await http().post('/attendance/check-in').attach('photo', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' }).expect(401);
+    });
+
+    it('GET /attendance/me/today returns the day from the token', async () => {
+      attendanceSend.mockReturnValueOnce(of({ employee_id: 'emp-1', attendance_date: '2026-11-06', check_in: null, check_out: null, work_minutes: null }));
+
+      const res = await http().get('/attendance/me/today').set('Authorization', await asEmployee()).expect(200);
+
+      expect(res.body).toMatchObject({ status: 200, message: "Today's attendance", data: { check_in: null, check_out: null } });
+      expect(attendanceSend).toHaveBeenCalledWith(ATTENDANCE_PATTERNS.TODAY, { employee_id: 'emp-1' });
+    });
+
+    it.each([
+      ['a bad date', '?date_from=2026-02-30', 'date_from must be a valid date'],
+      ['a wrong format', '?date_to=06-11-2026', 'date_to must be a date in YYYY-MM-DD format'],
+      ['limit too big', '?limit=101', 'limit must not be greater than 100'],
+    ])('GET /attendance/me rejects %s', async (_label, query, message) => {
+      const res = await http().get(`/attendance/me${query}`).set('Authorization', await asEmployee()).expect(400);
+      expect(res.body.data.errors).toContain(message);
+    });
+
+    it('GET /attendance/:id/photo streams the image itself, not JSON', async () => {
+      activeEmployee();
+      attendanceSend.mockReturnValueOnce(of(RECORD));
+      await http()
+        .post('/attendance/check-in')
+        .set('Authorization', await asEmployee())
+        .attach('photo', JPEG, { filename: 'a.jpg', contentType: 'image/jpeg' })
+        .expect(201);
+      const payload = attendanceSend.mock.calls.find(([pattern]) => pattern === ATTENDANCE_PATTERNS.RECORD)?.[1];
+      const photoPath =
+        typeof payload === 'object' && payload !== null && 'photo_path' in payload && typeof payload.photo_path === 'string'
+          ? payload.photo_path
+          : 'missing';
+      attendanceSend.mockReturnValueOnce(of({ photo_path: photoPath, photo_mime: 'image/jpeg' }));
+
+      const res = await http().get(`/attendance/${ATTENDANCE_ID}/photo`).set('Authorization', await asEmployee()).expect(200);
+
+      expect(res.headers['content-type']).toBe('image/jpeg');
+      expect(res.headers['x-content-type-options']).toBe('nosniff');
+      expect(res.headers['cache-control']).toBe('private, max-age=3600');
+      expect(Buffer.compare(res.body as Buffer, JPEG)).toBe(0);
+    });
+
+    it('GET /attendance is HR only', async () => {
+      const res = await http().get('/attendance').set('Authorization', await asEmployee()).expect(403);
+      expect(res.body).toEqual({ status: 403, message: 'You do not have permission to do this.' });
+    });
+
+    it('GET /attendance lists everyone with names and the date range used', async () => {
+      employeeSend.mockImplementation((pattern) =>
+        pattern === EMPLOYEE_PATTERNS.FIND_IDS
+          ? of(['emp-1'])
+          : of([{ id: 'emp-1', employee_code: 'EMP-0002', full_name: 'Budi', department: { id: 'd-1', name: 'Eng' }, status: 'ACTIVE', is_deleted: false }]),
+      );
+      attendanceSend.mockReturnValueOnce(of({ items: [{ employee_id: 'emp-1', attendance_date: '2026-11-06', check_in: RECORD, check_out: null, work_minutes: null }], total: 1 }));
+
+      const res = await http()
+        .get('/attendance?date_from=2026-11-01&date_to=2026-11-06&search=%20budi%20&department_id=d0000000-0000-4000-8000-000000000002')
+        .set('Authorization', `Bearer ${await tokenFor(ADMIN)}`)
+        .expect(200);
+
+      expect(res.body).toMatchObject({
+        status: 200,
+        message: 'Attendance',
+        data: {
+          items: [{ employee: { full_name: 'Budi' }, check_in: { photo: { url: `/attendance/${ATTENDANCE_ID}/photo` } } }],
+          meta: { page: 1, limit: 10, total: 1, total_pages: 1, date_from: '2026-11-01', date_to: '2026-11-06' },
+        },
+      });
+      expect(employeeSend).toHaveBeenCalledWith(EMPLOYEE_PATTERNS.FIND_IDS, { department_id: 'd0000000-0000-4000-8000-000000000002', search: 'budi' });
+    });
+
+    it('GET /attendance rejects a bad department_id', async () => {
+      const res = await http().get('/attendance?department_id=abc').set('Authorization', `Bearer ${await tokenFor(ADMIN)}`).expect(400);
+      expect(res.body.data.errors).toContain('department_id must be a valid id');
+    });
+
+    it("GET /attendance/:id/photo of someone else's record is a JSON 404", async () => {
+      attendanceSend.mockReturnValueOnce(throwError(() => ({ status_code: 404, message: 'Attendance not found' })));
+      const res = await http().get(`/attendance/${ATTENDANCE_ID}/photo`).set('Authorization', await asEmployee()).expect(404);
+      expect(res.body).toEqual({ status: 404, message: 'Attendance not found' });
+    });
+
+    it('GET /attendance/:id/photo is a 404 when the file is missing on disk', async () => {
+      vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      attendanceSend.mockReturnValueOnce(of({ photo_path: 'attendance/2026/11/gone.jpg', photo_mime: 'image/jpeg' }));
+      const res = await http().get(`/attendance/${ATTENDANCE_ID}/photo`).set('Authorization', await asEmployee()).expect(404);
+      expect(res.body).toEqual({ status: 404, message: 'Photo not found' });
     });
   });
 });

@@ -1,6 +1,7 @@
 import { RpcException } from '@nestjs/microservices';
 import { getModelToken } from '@nestjs/sequelize';
 import { Test } from '@nestjs/testing';
+import { Op } from 'sequelize';
 import { Sequelize } from 'sequelize-typescript';
 import { Department } from '../departments/department.model.js';
 import { EmployeeCodeService } from './employee-code.service.js';
@@ -21,6 +22,7 @@ function fakeEmployee(overrides: Record<string, unknown> = {}) {
     department: { id: 'd-1', name: 'Engineering' },
     hire_date: '2026-01-05',
     status: 'ACTIVE',
+    deleted_at: null,
     created_by: 'e-hr',
     updated_by: 'e-hr',
     created_at: NOW,
@@ -44,7 +46,7 @@ async function rpcErrorOf(promise: Promise<unknown>): Promise<unknown> {
 }
 
 describe('EmployeesService', () => {
-  const employees = { findByPk: vi.fn(), findOne: vi.fn(), create: vi.fn(), findAndCountAll: vi.fn() };
+  const employees = { findByPk: vi.fn(), findOne: vi.fn(), create: vi.fn(), findAndCountAll: vi.fn(), findAll: vi.fn() };
   const departments = { findByPk: vi.fn() };
   const codes = { next: vi.fn() };
   const transaction = { LOCK: { UPDATE: 'UPDATE' } };
@@ -134,6 +136,39 @@ describe('EmployeesService', () => {
       expect(await rpcErrorOf(service.update({ id: 'nope', changes: { full_name: 'X' }, actor_employee_id: 'e-hr' }))).toMatchObject({
         status_code: 404,
       });
+    });
+  });
+
+  describe('attendance lookups', () => {
+    it('findIds includes deleted employees and uses the same search as the list', async () => {
+      employees.findAll.mockResolvedValue([{ id: 'e-1' }, { id: 'e-2' }]);
+
+      expect(await service.findIds({ search: ' 50% ', department_id: 'd-1' })).toEqual(['e-1', 'e-2']);
+
+      const options = employees.findAll.mock.calls[0][0];
+      expect(options).toMatchObject({ attributes: ['id'], paranoid: false });
+      // Trimmed, and the % is matched literally (escaped).
+      expect(options.where[Op.and]).toEqual([
+        { department_id: 'd-1' },
+        { [Op.or]: expect.arrayContaining([{ full_name: { [Op.like]: '%50\\%%' } }]) },
+      ]);
+    });
+
+    it('findByIds returns summaries, marking deleted employees', async () => {
+      employees.findAll.mockResolvedValue([fakeEmployee(), fakeEmployee({ id: 'e-2', deleted_at: NOW })]);
+
+      const summaries = await service.findByIds({ ids: ['e-1', 'e-2'] });
+
+      expect(employees.findAll).toHaveBeenCalledWith(expect.objectContaining({ paranoid: false }));
+      expect(summaries).toEqual([
+        { id: 'e-1', employee_code: 'EMP-0042', full_name: 'Budi Santoso', department: { id: 'd-1', name: 'Engineering' }, status: 'ACTIVE', is_deleted: false },
+        expect.objectContaining({ id: 'e-2', is_deleted: true }),
+      ]);
+    });
+
+    it('findByIds with no ids does not query', async () => {
+      expect(await service.findByIds({ ids: [] })).toEqual([]);
+      expect(employees.findAll).not.toHaveBeenCalled();
     });
   });
 
