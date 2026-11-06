@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import type { InputHTMLAttributes, ReactNode } from 'react'
 import { cx } from '../../utils/cx'
+import { fieldControlClasses } from './field-styles'
 
 interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'id'> {
   label: string
@@ -31,13 +32,7 @@ export function TextField({ label, error, hint, revealable = false, type = 'text
           type={inputType}
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy || undefined}
-          className={cx(
-            'min-h-11 w-full rounded-lg border bg-surface px-3.5 text-ink transition-[border-color,box-shadow] placeholder:text-ink-subtle focus:ring-3 focus:outline-none',
-            error
-              ? 'border-danger focus:ring-danger-ring'
-              : 'border-line-strong focus:border-primary focus:ring-focus-ring',
-            revealable && 'pr-17',
-          )}
+          className={fieldControlClasses({ invalid: Boolean(error), className: revealable ? 'pr-17' : undefined })}
           {...rest}
         />
         {revealable && (
