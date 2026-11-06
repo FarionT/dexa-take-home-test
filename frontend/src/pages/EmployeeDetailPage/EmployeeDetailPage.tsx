@@ -18,7 +18,7 @@ import { useRequest } from '../../hooks/useRequest'
 import { deleteEmployee, getEmployee, resetEmployeePassword, updateEmployee } from '../../services/employee.service'
 import { ApiError } from '../../services/http'
 import type { Employee } from '../../types/employee'
-import { formatDate, formatDateTime, todayIsoDate } from '../../utils/format'
+import { formatDate, formatDateTime, todayWib } from '../../utils/format'
 import { ROLE_LABEL, STATUS_LABEL } from '../../utils/labels'
 import { flashMessage } from '../../utils/location-state'
 
@@ -104,13 +104,13 @@ export function EmployeeDetailPage() {
   const [action, setAction] = useState<AccountAction | null>(null)
   const [busy, setBusy] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [rehireDate, setRehireDate] = useState(todayIsoDate)
+  const [rehireDate, setRehireDate] = useState(todayWib)
   const [notice, setNotice] = useState<string | null>(() => flashMessage(location.state) ?? null)
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null)
 
   function openAction(next: AccountAction) {
     setActionError(null)
-    setRehireDate(todayIsoDate())
+    setRehireDate(todayWib())
     setAction(next)
   }
 

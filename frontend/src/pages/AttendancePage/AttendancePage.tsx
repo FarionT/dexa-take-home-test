@@ -37,7 +37,7 @@ function TimeLine({ label, iso }: { label: string; iso: string | undefined }) {
   return (
     <div className="flex items-baseline justify-between gap-4 border-b border-line py-2 last:border-b-0">
       <dt className="text-ink-muted">{label}</dt>
-      <dd className="font-semibold">{iso ? `${formatTimeWib(iso)} WIB` : '—'}</dd>
+      <dd className="font-semibold">{iso ? formatTimeWib(iso) : '—'}</dd>
     </div>
   )
 }
@@ -74,7 +74,7 @@ function CheckForm({ day, onRecorded, onRefused }: CheckFormProps) {
     setErrors({ fields: {}, form: null })
     try {
       const record = await recordAttendance(action, { photo: photo.blob, fileName: photo.fileName, notes })
-      onRecorded(`${TYPE_LABEL[record.type]} recorded at ${formatTimeWib(record.recorded_at)} WIB.`)
+      onRecorded(`${TYPE_LABEL[record.type]} recorded at ${formatTimeWib(record.recorded_at)}.`)
     } catch (error: unknown) {
       setErrors(toFormErrors(error, FIELDS))
       setSubmitting(false)

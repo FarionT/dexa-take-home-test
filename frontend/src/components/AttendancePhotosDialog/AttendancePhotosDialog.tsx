@@ -18,10 +18,10 @@ function EventPhoto({ event, label }: { event: Attendance | null; label: string 
     <figure className="flex flex-col gap-2">
       <figcaption className="flex items-baseline justify-between gap-2">
         <span className="font-semibold text-ink">{label}</span>
-        <span>{event ? `${formatTimeWib(event.recorded_at)} WIB` : 'Not yet'}</span>
+        <span>{event ? formatTimeWib(event.recorded_at) : 'Not yet'}</span>
       </figcaption>
       {event ? (
-        <AttendancePhoto url={event.photo.url} alt={`${label} photo, ${formatTimeWib(event.recorded_at)} WIB`} />
+        <AttendancePhoto url={event.photo.url} alt={`${label} photo, ${formatTimeWib(event.recorded_at)}`} />
       ) : (
         <div className="flex aspect-[4/3] w-full items-center justify-center rounded-lg border border-dashed border-line-strong">
           No {label.toLowerCase()} yet
