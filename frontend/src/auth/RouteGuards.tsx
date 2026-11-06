@@ -1,5 +1,6 @@
-import { Navigate, Outlet, useLocation } from 'react-router'
+import { Navigate, Outlet, useLocation, useNavigate } from 'react-router'
 import { FullPageMessage } from '../components'
+import type { Role } from '../types/auth'
 import { redirectFrom } from '../utils/location-state'
 import { useAuth } from './useAuth'
 
@@ -35,6 +36,26 @@ export function GuestOnly() {
     if (state.user.must_change_password) return <Navigate to="/change-password" replace />
     const from = redirectFrom(location.state)
     return <Navigate to={from && from !== '/login' ? from : '/'} replace />
+  }
+  return <Outlet />
+}
+
+/**
+ * Pages for one role, inside RequireAuth. Others get a "no access" message
+ * (the backend also refuses their requests with 403).
+ */
+export function RequireRole({ role }: { role: Role }) {
+  const { state } = useAuth()
+  const navigate = useNavigate()
+
+  if (state.status === 'authenticated' && state.user.role !== role) {
+    return (
+      <FullPageMessage
+        title="You don't have access to this page"
+        description="This page is for HR admins only."
+        action={{ label: 'Go to home', onClick: () => navigate('/') }}
+      />
+    )
   }
   return <Outlet />
 }

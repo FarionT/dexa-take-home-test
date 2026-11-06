@@ -22,7 +22,11 @@ Log in with the seeded HR admin (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` in `
 |------|-----|---------|
 | `/login` | logged out | Log in. Logged-in users are sent on |
 | `/change-password` | logged in | Change password. **Forced** while `must_change_password` is true (temporary password from HR): every other page redirects here |
-| `/` | logged in | Home: account, role, and the tools for that role (attendance, employees, monitoring: coming next) |
+| `/` | logged in | Home: greeting by name, role, and the tools for that role |
+| `/employees` | HR (ADMIN) | Employee list: search (name, code, email), department and status filters, pages. Filters live in the URL |
+| `/employees/new` | HR | Add an employee (their login is created too). The temporary password is shown **once** in a dialog |
+| `/employees/:id` | HR | Profile and login account, with actions: reset password, make/remove HR admin, deactivate (left), reactivate (rehire, new temporary password), delete (mistakes only). Hidden on your own record |
+| `/employees/:id/edit` | HR | Edit the profile (only changed fields are sent) |
 | `*` | anyone | Not found |
 
 ## Structure
@@ -37,19 +41,25 @@ src/
 │   ├── http.ts           axios instance (base URL, timeout, token + 401 interceptors) and request():
 │   │                     unwraps { status, message, data }, checks it, throws ApiError
 │   ├── auth.service.ts   login, fetchCurrentUser, changePassword
+│   ├── employee.service.ts  departments, employees CRUD, reset password, my profile
 │   └── token-storage.ts  token in localStorage (+ in-memory copy), expiry from the token
 ├── auth/
 │   ├── AuthProvider.tsx  session state: restore on load, login, logout, change password, auto-logout
 │   ├── useAuth.ts        hook to read it
-│   └── RouteGuards.tsx   RequireAuth / GuestOnly (which page to show)
+│   └── RouteGuards.tsx   RequireAuth / GuestOnly / RequireRole (which page to show)
+├── hooks/
+│   └── useRequest.ts     load data: { data, error, loading, reload } (see Conventions)
 ├── components/
 │   ├── index.ts          re-exports every component: import { Button, Alert } from '../../components'
 │   └── <Name>/           one folder per component: <Name>.tsx, index.ts (+ <Name>.scss only if needed)
-│                         (Alert, AuthLayout, Brand, Button, FullPageMessage, Spinner, TextField)
+│                         Alert, AppLayout (header + nav for logged-in pages), AuthLayout, Badge, Brand,
+│                         Button (+ buttonClasses for links), Dialog (native <dialog>), EmployeeForm,
+│                         FullPageMessage, Pagination, SelectField, Spinner, TemporaryPasswordNotice, TextField
 ├── pages/
 │   ├── index.ts          re-exports every page (used by App.tsx)
 │   └── <Name>Page/       one folder per page: <Name>Page.tsx, index.ts (+ .scss only if needed)
-├── utils/                cx() class joiner, form error mapping, password rules, router state readers
+├── utils/                cx(), form errors, employee form rules, date formatting, labels, password rules,
+│                         router state readers
 └── index.css             Tailwind entry + design tokens (the only .css file)
 ```
 
@@ -64,6 +74,7 @@ src/
 ## Conventions
 
 - **API calls only in `services/`**, never in components or pages. Services use `request()` from `services/http.ts` (the shared axios instance `api`), never `axios` directly, and pass a type guard (`parseWith(isLoginResult, …)`) so the response shape is checked at runtime instead of trusted with a cast. The token is added by the axios request interceptor; a `401` on a request that carried a token logs the user out (response interceptor).
+- **Loading data**: use `useRequest(key, load)` from `src/hooks/useRequest.ts`. `key` identifies the request (include every input, e.g. the query); when it changes the data reloads, and `reload()` runs it again. It returns `{ data, error, loading, reload }`, keeps the previous `data` while the next key loads (no flicker when paging), and ignores outdated responses. Don't call `setState` at the start of a `useEffect` to mark loading: the React lint rules (`react-hooks/set-state-in-effect`) reject it.
 - **Errors**: services throw `ApiError` (`status`, `message`, `errors[]`), never raw axios errors. `status` is `0` when the server can't be reached or times out (15 s). Forms use `toFormErrors()` to show validation messages under the right field.
 - **Folders**: a new component goes in `components/<Name>/` with `<Name>.tsx`, `index.ts` and, only if Tailwind can't do it, `<Name>.scss`, (`export { Name } from './Name'`), and is added to `components/index.ts`. Same for pages in `pages/`. Pages import components from the root (`'../../components'`); components import each other by folder (`'../Spinner'`) to avoid circular imports.
 - **Data fields stay snake_case** as in the API (`user.must_change_password`); variables and functions are camelCase.
