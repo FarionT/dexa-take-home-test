@@ -4,7 +4,7 @@ Fullstack take-home test: a WFH employee attendance app (employees log in and cl
 
 | Folder | Stack |
 |--------|-------|
-| [`backend/`](backend/) | NestJS 12 + TypeScript (microservices monorepo), MySQL 8.4 |
+| [`backend/`](backend/) | NestJS 12 + TypeScript (microservices monorepo), MySQL 8.4, Sequelize |
 | [`frontend/`](frontend/) | React + Vite + TypeScript |
 
 ## Architecture
@@ -22,6 +22,7 @@ The backend is four NestJS apps in one monorepo: an HTTP **gateway** (the only e
 - **MySQL**: listed as a preferred database in the brief, and the data (employees, credentials, attendance records) is plainly relational.
 - **Microservices** because the brief asks for it. At this scale a single modular NestJS app would normally be enough; the split is kept light (NestJS built-in TCP transport, no message broker).
 - **One database per service** (`dexa_auth`, `dexa_employee`, `dexa_attendance`): each service owns its data; services never read each other's tables.
+- **Sequelize** as the ORM, with TypeScript migrations run by `sequelize-cli` and soft delete (`paranoid`) on every table. Schema: [`backend/docs/database-design.md`](backend/docs/database-design.md).
 - **Photos** are stored as files; the database keeps only the file path and metadata.
 
 ## Requirements
@@ -48,10 +49,12 @@ On first start MySQL creates the three databases and grants `DB_USER` access to 
 ```bash
 cd backend
 npm install
+npm run db:migrate     # create the tables
+npm run db:seed        # 3 departments + the first HR admin (SEED_ADMIN_* in .env)
 npm run start:dev      # all four apps; gateway on http://localhost:3000
 ```
 
-Check http://localhost:3000/health: it shows whether each service is up.
+Check http://localhost:3000/health: it shows whether each service and its database are up.
 
 ### 3. Frontend
 

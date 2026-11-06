@@ -9,7 +9,7 @@ export class EmployeeController {
   constructor(private readonly employeeService: EmployeeService) {}
 
   @MessagePattern(EMPLOYEE_PATTERNS.PING)
-  ping(): ServicePing {
+  ping(): Promise<ServicePing> {
     return this.employeeService.ping();
   }
 }

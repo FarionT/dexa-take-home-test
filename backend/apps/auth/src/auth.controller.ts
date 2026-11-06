@@ -9,7 +9,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @MessagePattern(AUTH_PATTERNS.PING)
-  ping(): ServicePing {
+  ping(): Promise<ServicePing> {
     return this.authService.ping();
   }
 }

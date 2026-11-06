@@ -9,7 +9,7 @@ export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @MessagePattern(ATTENDANCE_PATTERNS.PING)
-  ping(): ServicePing {
+  ping(): Promise<ServicePing> {
     return this.attendanceService.ping();
   }
 }

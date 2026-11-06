@@ -9,6 +9,9 @@
     "removeComments": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
+    // Required by sequelize-typescript: real class fields (the ES2022+ default)
+    // shadow Sequelize's attribute getters, so model values would read as undefined.
+    "useDefineForClassFields": false,
     "allowSyntheticDefaultImports": true,
     "target": "ES2023",
     "sourceMap": true,

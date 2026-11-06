@@ -29,7 +29,9 @@ export class HealthService {
       this.ping('employee', this.employeeClient, EMPLOYEE_PATTERNS.PING),
       this.ping('attendance', this.attendanceClient, ATTENDANCE_PATTERNS.PING),
     ]);
-    const allUp = [auth, employee, attendance].every((s) => s.status === 'up');
+    const allUp = [auth, employee, attendance].every(
+      (s) => s.status === 'up' && s.database === 'up',
+    );
 
     return {
       status: allUp ? 'ok' : 'degraded',
@@ -42,7 +44,7 @@ export class HealthService {
       const reply = await firstValueFrom(
         client.send<ServicePing>(pattern, {}).pipe(timeout(PING_TIMEOUT_MS)),
       );
-      return { status: 'up', uptimeSeconds: reply.uptimeSeconds };
+      return { status: 'up', database: reply.database, uptime_seconds: reply.uptime_seconds };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`${name} service did not answer ping: ${message}`);
