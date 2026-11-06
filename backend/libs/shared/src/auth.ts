@@ -65,3 +65,60 @@ export interface ChangePasswordRequest {
   current_password: string;
   new_password: string;
 }
+
+// Account (login) data shown next to an employee, and the messages the gateway
+// sends to manage it. One account per employee.
+
+/** The login side of an employee. Never contains the password or its hash. */
+export interface EmployeeAccount {
+  user_id: string;
+  employee_id: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  must_change_password: boolean;
+  last_login_at: string | null;
+}
+
+export interface CreateUserRequest {
+  employee_id: string;
+  email: string;
+  role: Role;
+}
+
+/** A newly generated password, returned once so HR can hand it over. Never stored or logged. */
+export interface TemporaryPasswordResult {
+  temporary_password: string;
+}
+
+export interface CreateUserResult extends TemporaryPasswordResult {
+  account: EmployeeAccount;
+}
+
+export interface FindAccountsRequest {
+  employee_ids: string[];
+}
+
+export interface UpdateAccountRequest {
+  /** The user making the change (JWT `sub`): checked by the role guardrails. */
+  actor_user_id: string;
+  employee_id: string;
+  email?: string;
+  role?: Role;
+  is_active?: boolean;
+}
+
+export interface UpdateAccountResult {
+  account: EmployeeAccount;
+  /** Set when the account was reactivated: a new temporary password. */
+  temporary_password: string | null;
+}
+
+export interface AccountActionRequest {
+  actor_user_id: string;
+  employee_id: string;
+}
+
+export interface RestoreUserRequest {
+  employee_id: string;
+}

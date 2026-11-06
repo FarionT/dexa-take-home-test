@@ -3,8 +3,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SequelizeModule } from '@nestjs/sequelize';
 import { sequelizeOptions } from '@app/shared';
 import { Department } from './departments/department.model.js';
+import { DepartmentsController } from './departments/departments.controller.js';
+import { DepartmentsService } from './departments/departments.service.js';
 import { EmployeeCodeService } from './employees/employee-code.service.js';
 import { Employee } from './employees/employee.model.js';
+import { EmployeesController } from './employees/employees.controller.js';
+import { EmployeesService } from './employees/employees.service.js';
 import { EmployeeController } from './employee.controller.js';
 import { EmployeeService } from './employee.service.js';
 
@@ -19,7 +23,7 @@ import { EmployeeService } from './employee.service.js';
     }),
     SequelizeModule.forFeature([Department, Employee]),
   ],
-  controllers: [EmployeeController],
-  providers: [EmployeeService, EmployeeCodeService],
+  controllers: [EmployeeController, DepartmentsController, EmployeesController],
+  providers: [EmployeeService, EmployeeCodeService, DepartmentsService, EmployeesService],
 })
 export class EmployeeModule {}

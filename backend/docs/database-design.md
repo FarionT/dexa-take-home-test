@@ -149,7 +149,7 @@ Login credentials and role. The only place passwords exist.
 
 #### Generated password flow
 
-1. When HR creates an employee, the **auth service** generates a random password (16 characters, using `crypto.randomBytes`), stores only its bcrypt hash, and sets `must_change_password = TRUE`.
+1. When HR creates an employee (and also on **reset password** and on **reactivation**), the **auth service** generates a random password (14 characters from `crypto.randomInt`, always with an upper-case letter, a lower-case letter and a digit, no look-alike characters), stores only its bcrypt hash, and sets `must_change_password = TRUE`.
 2. The plain password is returned **once** in the create-employee response, so HR can hand it to the employee. It is never stored, logged or retrievable later.
 3. The JWT includes `must_change_password`. While it is `true`, the gateway only allows `POST /auth/change-password` and `GET /auth/me`; every other endpoint returns `403`.
 4. After the change: `must_change_password = FALSE`, `password_changed_at = now`, and the change-password response contains a **new token** without the flag (no second login needed).
@@ -300,7 +300,7 @@ MySQL allows any number of `NULL`s in a unique key. Live rows all have `1`, so t
 
 | Action | Effect |
 |--------|--------|
-| **Delete employee** | Soft-deletes the `employees` row, then the gateway soft-deletes the matching `users` row (`auth.delete-user`), so the person can no longer log in. Their attendance rows are **kept** as history |
+| **Delete employee** | The gateway soft-deletes the `users` row **first** (`auth.delete-user`, so access ends even if the next step fails), then the `employees` row. If deleting the employee fails, the login is restored (`auth.restore-user`). Their attendance rows are **kept** as history |
 | **Create employee fails at the auth step** | The compensating action soft-deletes the just-created employee. Its email and code stay free for the retry (thanks to `not_deleted`) |
 | **Delete department** | Refused with `409 Conflict` while live employees are in it. `ON DELETE RESTRICT` only applies to real `DELETE`s, so the employee service checks this itself |
 | **Delete attendance record** | Soft-deletes the row. The photo file stays on disk, because the record can be restored |
@@ -316,11 +316,14 @@ MySQL can't have foreign keys between databases, so the gateway enforces these w
 
 | Rule | How |
 |------|-----|
-| `users.employee_id` → `employees.id` | **Create employee**: the gateway creates the employee first, then the user with that `id`. If creating the user fails, it soft-deletes the just-created employee (compensating action), so there is never a live employee without a login |
+| `users.employee_id` → `employees.id` | **Create employee**: the gateway creates the employee first, then the user with that `id`. If creating the user fails, it soft-deletes the just-created employee (compensating action), so there is never a live employee without a login. The employee's code stays used |
 | `attendances.employee_id` → `employees.id` | The ID comes from a valid JWT, and inactive users can't log in |
-| `employees.email` = `users.email` | Same value on create. On an email update, the gateway calls `employee.update`, then `auth.update-email`, and reverts the employee email if the second step fails |
+| `employees.email` = `users.email` | Same value on create. On update, the gateway calls `employee.update` (which returns the old values), then `auth.update-account`; if the second step fails (email taken, guardrail refused), it restores the old employee values, including `updated_by` |
 | `employees.status` ↔ `users.is_active` | Setting an employee `INACTIVE` also sets `users.is_active = FALSE` (and back for `ACTIVE`) |
-| `employees.deleted_at` ↔ `users.deleted_at` | Soft-deleting an employee also soft-deletes their user (and restoring restores both) |
+| `employees.deleted_at` ↔ `users.deleted_at` | Deleting an employee soft-deletes their user first, then the employee (see Soft delete). HR only ever acts on the employee; there is no separate user list |
+| Reactivation | `INACTIVE` → `ACTIVE` reactivates the same employee and login (rehire: same code, same history) and issues a **new temporary password**, so an old password never works again |
+
+If an undo step itself fails, the gateway logs `MANUAL FIX NEEDED: …` with the ids and still returns the original error.
 
 **HR attendance view** joins data from two services: the attendance service returns the records, then the gateway fetches the matching names in one batch (`employee.find-by-ids`) and merges them. Names are not copied into `attendances`, so they never go stale.
 

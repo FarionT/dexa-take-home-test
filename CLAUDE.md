@@ -40,16 +40,17 @@ dexa-test/
 │   │   ├── gateway/          # HTTP entry point (:3000), TCP clients to services
 │   │   │   ├── src/          # main.ts, gateway.module.ts (global pipe/filter/guards)
 │   │   │   │   ├── auth/     # /auth endpoints, DTOs, guards/, auth.decorators.ts
+│   │   │   │   ├── employees/  # /employees + /departments: DTOs, orchestration with undo steps
 │   │   │   │   ├── clients/  # TCP clients + rpc.ts (sendToService)
 │   │   │   │   ├── common/   # http-exception.filter.ts (snake_case error JSON)
 │   │   │   │   └── health/   # public /health
 │   │   │   └── test/         # e2e tests (gateway.e2e-spec.ts)
 │   │   ├── auth/             # TCP microservice (:3001), DB dexa_auth
-│   │   │   ├── src/          # auth.service.ts (login, me, change password), users/, passwords/, tokens/
+│   │   │   ├── src/          # auth.service.ts (login, me, change password), users/ (accounts + guardrails), passwords/, tokens/
 │   │   │   ├── migrations/   # sequelize-cli TS migrations for dexa_auth
 │   │   │   └── seeders/      # HR admin login seed
 │   │   ├── employee/         # TCP microservice (:3002), DB dexa_employee
-│   │   │   ├── src/          # departments/, employees/ (models, employee-code.service.ts)
+│   │   │   ├── src/          # departments/, employees/ (models, CRUD service, employee-code.service.ts)
 │   │   │   ├── migrations/
 │   │   │   └── seeders/      # departments + HR employee seed
 │   │   └── attendance/       # TCP microservice (:3003), DB dexa_attendance
@@ -59,7 +60,7 @@ dexa-test/
 │   ├── scripts/run-all.ts    # starts all four apps (npm run start:dev / start:prod)
 │   ├── sequelize.config.ts   # sequelize-cli config: one "env" per service DB (auth / employee / attendance)
 │   ├── docs/database-design.md  # tables, indexes, cross-DB rules (keep in sync with entities)
-│   ├── docs/api/             # API reference per feature (auth.md); keep in sync with endpoints
+│   ├── docs/api/             # API reference per feature (auth.md, employees.md); keep in sync with endpoints
 │   ├── dist/                 # compiled output (do not edit)
 │   ├── nest-cli.json         # monorepo project list
 │   ├── tsconfig.json         # base + `@app/shared` path; each app has tsconfig.app.json
@@ -269,6 +270,8 @@ Run inside the folder. **Confirm each command against that folder's `package.jso
   3. The last active `ADMIN` may not be demoted, deactivated or deleted (`409`). Check it in the auth service **inside a transaction** after `SELECT … WHERE role = 'ADMIN' AND is_active AND deleted_at IS NULL FOR UPDATE`, never as a plain count before the update (race: two admins demoting each other).
   4. Record who did it (`employees.updated_by`).
   Each rule needs a test, including a concurrent "two admins demote each other" case.
+  Implemented in `backend/apps/auth/src/users/users.service.ts`: lock the active-admin rows (`FOR UPDATE`) **before** the target row, so concurrent role changes queue instead of deadlocking.
+- **Cross-service writes** (backend gateway, e.g. `apps/gateway/src/employees/employees.service.ts`): two databases share no transaction, so every flow that writes to two services runs in a fixed order with an **undo step** for the second failure (create: employee → login, undo = delete employee; update: employee → login, undo = restore the `previous` values the employee service returned; delete: login → employee, undo = restore login). Undo steps go through `undo()`, which logs `MANUAL FIX NEEDED` with ids if the undo itself fails, then the original error is returned. Employees and logins are 1:1: HR acts only on employees; never add an endpoint that changes a login without its employee.
   - Avoid MySQL 8 reserved words as column names (e.g. `last_value`, `rank`, `rows`, `groups`): they work only when backtick-quoted and break plain SQL in DBeaver.
   - **No circular imports between model files.** With ESM + `emitDecoratorMetadata`, `design:type` reads the imported class while the file loads, so two models importing each other crash with `ReferenceError: Cannot access 'X' before initialization`. Define associations on one side only (e.g. `Employee` `@BelongsTo(() => Department)`, no `@HasMany` back).
   - `tsconfig.json` sets `useDefineForClassFields: false`. Required by `sequelize-typescript`: with it `true` (the ES2022+ default), class fields shadow Sequelize's attribute getters and every model value reads as `undefined`. Do not remove it.

@@ -6,7 +6,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { of, throwError } from 'rxjs';
 import type { Observable } from 'rxjs';
-import { AUTH_PATTERNS, SERVICE_CLIENTS, createPing } from '@app/shared';
+import { AUTH_PATTERNS, EMPLOYEE_PATTERNS, SERVICE_CLIENTS, createPing } from '@app/shared';
 import type { JwtPayload } from '@app/shared';
 import { Roles } from '../src/auth/auth.decorators.js';
 import { GatewayModule } from '../src/gateway.module.js';
@@ -56,13 +56,17 @@ describe('Gateway (e2e)', () => {
   let jwt: JwtService;
   // Fake auth service: answers ping by default; each test sets the other replies.
   const authSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
-  const servicePing = (key: 'employee' | 'attendance') => ({ send: () => of(createPing(key, 'up')) });
+  const employeeSend = vi.fn<(pattern: string, payload: unknown) => Observable<unknown>>();
+  const servicePing = (key: 'attendance') => ({ send: () => of(createPing(key, 'up')) });
 
   beforeAll(() => {
     process.env.JWT_SECRET = SECRET;
   });
 
   beforeEach(async () => {
+    employeeSend.mockReset().mockImplementation((pattern) =>
+      pattern === EMPLOYEE_PATTERNS.PING ? of(createPing('employee', 'up')) : throwError(() => new Error(`unexpected ${pattern}`)),
+    );
     authSend.mockReset().mockImplementation((pattern) =>
       pattern === AUTH_PATTERNS.PING ? of(createPing('auth', 'up')) : throwError(() => new Error(`unexpected ${pattern}`)),
     );
@@ -70,7 +74,7 @@ describe('Gateway (e2e)', () => {
       .overrideProvider(SERVICE_CLIENTS.auth)
       .useValue({ send: authSend })
       .overrideProvider(SERVICE_CLIENTS.employee)
-      .useValue(servicePing('employee'))
+      .useValue({ send: employeeSend })
       .overrideProvider(SERVICE_CLIENTS.attendance)
       .useValue(servicePing('attendance'))
       .compile();
@@ -247,6 +251,129 @@ describe('Gateway (e2e)', () => {
     it('turns an unexpected error into a generic 500 without internal details', async () => {
       const res = await http().get('/probe/crash').set('Authorization', `Bearer ${await tokenFor(EMPLOYEE)}`).expect(500);
       expect(res.body).toEqual({ status: 500, message: 'Something went wrong. Please try again.' });
+    });
+  });
+
+  describe('employees', () => {
+    const EMPLOYEE_RECORD = {
+      id: '7a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d',
+      employee_code: 'EMP-0042',
+      full_name: 'Budi Santoso',
+      email: 'budi@dexa.com',
+      phone: null,
+      position: 'Developer',
+      department: { id: 'd0000000-0000-4000-8000-000000000002', name: 'Engineering' },
+      hire_date: '2026-01-05',
+      status: 'ACTIVE',
+      created_by: 'emp-2',
+      updated_by: 'emp-2',
+      created_at: '2026-11-06T07:00:00.000Z',
+      updated_at: '2026-11-06T07:00:00.000Z',
+    };
+    const VALID_CREATE = {
+      full_name: 'Budi Santoso',
+      email: 'budi@dexa.com',
+      position: 'Developer',
+      department_id: 'd0000000-0000-4000-8000-000000000002',
+      hire_date: '2026-01-05',
+    };
+    const asAdmin = async () => `Bearer ${await tokenFor(ADMIN)}`;
+    const asEmployee = async () => `Bearer ${await tokenFor(EMPLOYEE)}`;
+
+    it.each([
+      ['GET', '/employees'],
+      ['GET', '/departments'],
+      ['POST', '/employees'],
+      ['GET', `/employees/${EMPLOYEE_RECORD.id}`],
+      ['PATCH', `/employees/${EMPLOYEE_RECORD.id}`],
+      ['POST', `/employees/${EMPLOYEE_RECORD.id}/reset-password`],
+      ['DELETE', `/employees/${EMPLOYEE_RECORD.id}`],
+    ])('%s %s is HR only (403 for an EMPLOYEE)', async (method, path) => {
+      const req = method === 'GET' ? http().get(path) : method === 'POST' ? http().post(path) : method === 'PATCH' ? http().patch(path) : http().delete(path);
+      const res = await req.set('Authorization', await asEmployee()).send({}).expect(403);
+      expect(res.body).toEqual({ status: 403, message: 'You do not have permission to do this.' });
+    });
+
+    it('GET /employees/me returns the caller\'s own profile (from the token, any role)', async () => {
+      employeeSend.mockReturnValueOnce(of({ ...EMPLOYEE_RECORD, id: 'emp-1' }));
+      authSend.mockReturnValueOnce(of([]));
+
+      const res = await http().get('/employees/me').set('Authorization', await asEmployee()).expect(200);
+
+      expect(res.body).toMatchObject({ status: 200, message: 'My profile', data: { id: 'emp-1', account: null } });
+      expect(employeeSend).toHaveBeenCalledWith(EMPLOYEE_PATTERNS.FIND_ONE, { id: 'emp-1' });
+    });
+
+    it('GET /employees returns items and pagination meta', async () => {
+      employeeSend.mockReturnValueOnce(of({ items: [EMPLOYEE_RECORD], total: 1 }));
+      authSend.mockReturnValueOnce(of([]));
+
+      const res = await http().get('/employees?search=budi&status=ACTIVE').set('Authorization', await asAdmin()).expect(200);
+
+      expect(res.body).toMatchObject({ status: 200, message: 'Employees', data: { meta: { page: 1, limit: 10, total: 1, total_pages: 1 } } });
+      expect(employeeSend).toHaveBeenCalledWith(EMPLOYEE_PATTERNS.LIST, expect.objectContaining({ page: 1, limit: 10, search: 'budi', status: 'ACTIVE' }));
+    });
+
+    it.each([
+      ['limit too big', '?limit=500', 'limit must not be greater than 100'],
+      ['page not a number', '?page=abc', 'page must be a whole number'],
+      ['unknown status', '?status=FIRED', 'status must be one of: ACTIVE, INACTIVE'],
+    ])('GET /employees rejects %s', async (_label, query, message) => {
+      const res = await http().get(`/employees${query}`).set('Authorization', await asAdmin()).expect(400);
+      expect(res.body.data.errors).toContain(message);
+    });
+
+    it('rejects an id that is not a UUID with 400', async () => {
+      const res = await http().get('/employees/abc').set('Authorization', await asAdmin()).expect(400);
+      expect(res.body.status).toBe(400);
+    });
+
+    it('POST /employees returns 201 with the temporary password', async () => {
+      employeeSend.mockReturnValueOnce(of(EMPLOYEE_RECORD));
+      authSend.mockReturnValueOnce(of({ account: { user_id: 'u-9', employee_id: EMPLOYEE_RECORD.id }, temporary_password: 'Tmp9xKq2mWp4Rz' }));
+
+      const res = await http().post('/employees').set('Authorization', await asAdmin()).send({ ...VALID_CREATE, email: ' Budi@Dexa.COM ' }).expect(201);
+
+      expect(res.body).toMatchObject({ status: 201, message: 'Employee created', data: { temporary_password: 'Tmp9xKq2mWp4Rz' } });
+      expect(employeeSend).toHaveBeenCalledWith(
+        EMPLOYEE_PATTERNS.CREATE,
+        expect.objectContaining({ profile: expect.objectContaining({ email: 'budi@dexa.com', phone: null }), actor_employee_id: 'emp-2' }),
+      );
+    });
+
+    it('POST /employees lists every validation problem', async () => {
+      const res = await http()
+        .post('/employees')
+        .set('Authorization', await asAdmin())
+        .send({ full_name: '  ', email: 'nope', phone: 'call me', position: 'Dev', department_id: '123', hire_date: '2026-02-30', role: 'BOSS', employee_code: 'EMP-9999' })
+        .expect(400);
+
+      expect(res.body.message).toBe('Validation failed');
+      expect(res.body.data.errors).toEqual(
+        expect.arrayContaining([
+          'full_name is required',
+          'email must be a valid email address',
+          expect.stringContaining('phone may only contain digits'),
+          'department_id must be a valid id',
+          'hire_date must be a valid date',
+          'role must be one of: ADMIN, EMPLOYEE',
+          'property employee_code should not exist', // the code is always generated
+        ]),
+      );
+      expect(employeeSend).not.toHaveBeenCalledWith(EMPLOYEE_PATTERNS.CREATE, expect.anything());
+    });
+
+    it('PATCH /employees/:id with an empty body is 400', async () => {
+      const res = await http().patch(`/employees/${EMPLOYEE_RECORD.id}`).set('Authorization', await asAdmin()).send({}).expect(400);
+      expect(res.body).toEqual({ status: 400, message: 'Nothing to update: send at least one field' });
+    });
+
+    it('DELETE /employees/:id returns 200 without data', async () => {
+      employeeSend.mockImplementation((pattern) => of(pattern === EMPLOYEE_PATTERNS.FIND_ONE ? EMPLOYEE_RECORD : { id: EMPLOYEE_RECORD.id }));
+      authSend.mockReturnValueOnce(of({ deleted: true }));
+
+      const res = await http().delete(`/employees/${EMPLOYEE_RECORD.id}`).set('Authorization', await asAdmin()).expect(200);
+      expect(res.body).toEqual({ status: 200, message: 'Employee deleted' });
     });
   });
 });

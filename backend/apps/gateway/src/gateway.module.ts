@@ -8,6 +8,7 @@ import { JwtAuthGuard } from './auth/guards/jwt-auth.guard.js';
 import { PasswordChangeGuard } from './auth/guards/password-change.guard.js';
 import { RolesGuard } from './auth/guards/roles.guard.js';
 import { HttpExceptionFilter } from './common/http-exception.filter.js';
+import { EmployeesModule } from './employees/employees.module.js';
 import { ResponseEnvelopeInterceptor } from './common/response-envelope.interceptor.js';
 import { HealthModule } from './health/health.module.js';
 
@@ -22,6 +23,7 @@ import { HealthModule } from './health/health.module.js';
     }),
     HealthModule,
     AuthModule,
+    EmployeesModule,
   ],
   providers: [
     // Validates every request body against its DTO; unknown fields are rejected.

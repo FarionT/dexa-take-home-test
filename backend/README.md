@@ -62,7 +62,7 @@ Stop MySQL with `docker compose down` (data is kept).
 
 ## API
 
-Full reference per feature in [`docs/api/`](docs/api/): [auth](docs/api/auth.md).
+Full reference per feature in [`docs/api/`](docs/api/): [auth](docs/api/auth.md), [employees](docs/api/employees.md).
 
 All requests go to the gateway (`http://localhost:3000`). Every endpoint needs `Authorization: Bearer <access_token>` unless marked public.
 
@@ -72,6 +72,14 @@ All requests go to the gateway (`http://localhost:3000`). Every endpoint needs `
 | POST | `/auth/login` | public | `{ email, password }` | `data`: `{ access_token, token_type, expires_in, user }` |
 | GET | `/auth/me` | any logged-in user | — | `data`: the current user (no password hash) |
 | POST | `/auth/change-password` | any logged-in user | `{ current_password, new_password }` | `data`: a new `{ access_token, … }` |
+| GET | `/departments` | ADMIN | — | `data`: departments |
+| GET | `/employees` | ADMIN | query: `page, limit, search, department_id, status` | `data`: `{ items, meta }` |
+| GET | `/employees/me` | any logged-in user | — | `data`: own employee profile |
+| GET | `/employees/:id` | ADMIN | — | `data`: employee + `account` |
+| POST | `/employees` | ADMIN | employee fields (+ `role`) | `data`: `{ employee, temporary_password }` (shown once) |
+| PATCH | `/employees/:id` | ADMIN | any employee fields, `status`, `role` | `data`: `{ employee, temporary_password }` (only on reactivation) |
+| POST | `/employees/:id/reset-password` | ADMIN | — | `data`: `{ temporary_password }` |
+| DELETE | `/employees/:id` | ADMIN | — | soft delete (mistakes only) |
 
 - Passwords are hashed with **bcrypt** (`bcryptjs`, cost 12). They must be 8–72 bytes and contain a letter and a number (72 bytes is bcrypt's limit; longer passwords are rejected, not cut).
 - A wrong email and a wrong password give the same `401 Invalid email or password`, and take about the same time.
