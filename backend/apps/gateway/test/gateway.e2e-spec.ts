@@ -15,7 +15,7 @@ describe('Gateway (e2e)', () => {
     for (const key of SERVICE_KEYS) {
       builder = builder
         .overrideProvider(SERVICE_CLIENTS[key])
-        .useValue({ send: () => of(createPing(key)) });
+        .useValue({ send: () => of(createPing(key, 'up')) });
     }
     app = (await builder.compile()).createNestApplication();
     await app.init();

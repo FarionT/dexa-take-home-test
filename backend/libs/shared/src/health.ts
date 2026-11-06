@@ -4,15 +4,17 @@ import type { ServiceKey } from './services.js';
 export interface ServicePing {
   service: ServiceKey;
   status: 'ok';
-  uptimeSeconds: number;
+  database: 'up' | 'down';
+  uptime_seconds: number;
   timestamp: string;
 }
 
-export function createPing(service: ServiceKey): ServicePing {
+export function createPing(service: ServiceKey, database: 'up' | 'down'): ServicePing {
   return {
     service,
     status: 'ok',
-    uptimeSeconds: Math.round(process.uptime()),
+    database,
+    uptime_seconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString(),
   };
 }

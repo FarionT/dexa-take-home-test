@@ -4,7 +4,7 @@ import { SERVICE_CLIENTS, createPing } from '@app/shared';
 import type { ServiceKey } from '@app/shared';
 import { HealthService } from './health.service.js';
 
-const upClient = (key: ServiceKey) => ({ send: () => of(createPing(key)) });
+const upClient = (key: ServiceKey) => ({ send: () => of(createPing(key, 'up')) });
 const downClient = { send: () => throwError(() => new Error('Connection refused')) };
 
 async function createService(attendanceClient: object): Promise<HealthService> {
@@ -26,6 +26,14 @@ describe('HealthService', () => {
 
     expect(result.status).toBe('ok');
     expect(result.services.attendance.status).toBe('up');
+  });
+
+  it('reports degraded when a service is up but its database is down', async () => {
+    const service = await createService({ send: () => of(createPing('attendance', 'down')) });
+    const result = await service.check();
+
+    expect(result.status).toBe('degraded');
+    expect(result.services.attendance).toMatchObject({ status: 'up', database: 'down' });
   });
 
   it('reports degraded, not an error, when one service is down', async () => {
