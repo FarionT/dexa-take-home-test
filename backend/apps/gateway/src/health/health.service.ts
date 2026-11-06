@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ClientProxy } from '@nestjs/microservices';
-import { firstValueFrom, timeout } from 'rxjs';
+import { TimeoutError, firstValueFrom, timeout } from 'rxjs';
 import {
   ATTENDANCE_PATTERNS,
   AUTH_PATTERNS,
@@ -47,8 +47,9 @@ export class HealthService {
       return { status: 'up', database: reply.database, uptime_seconds: reply.uptime_seconds };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      // /health is public: report only the kind of failure; hosts and ports stay in the log.
       this.logger.warn(`${name} service did not answer ping: ${message}`);
-      return { status: 'down', error: message };
+      return { status: 'down', error: error instanceof TimeoutError ? 'timeout' : 'unreachable' };
     }
   }
 }

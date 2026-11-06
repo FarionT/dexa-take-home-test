@@ -65,6 +65,8 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
+Log in with the seeded HR admin (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` from `backend/.env`). See [`frontend/README.md`](frontend/README.md) for pages, structure and how auth works.
+
 ## Useful commands
 
 | Action | `backend/` | `frontend/` |

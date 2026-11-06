@@ -151,8 +151,8 @@ Login credentials and role. The only place passwords exist.
 
 1. When HR creates an employee, the **auth service** generates a random password (16 characters, using `crypto.randomBytes`), stores only its bcrypt hash, and sets `must_change_password = TRUE`.
 2. The plain password is returned **once** in the create-employee response, so HR can hand it to the employee. It is never stored, logged or retrievable later.
-3. The JWT includes `mustChangePassword`. While it is `true`, the gateway only allows `POST /auth/change-password` and `GET /auth/me`; every other endpoint returns `403`.
-4. After the change: `must_change_password = FALSE`, `password_changed_at = now`, and the user logs in again for a normal token.
+3. The JWT includes `must_change_password`. While it is `true`, the gateway only allows `POST /auth/change-password` and `GET /auth/me`; every other endpoint returns `403`.
+4. After the change: `must_change_password = FALSE`, `password_changed_at = now`, and the change-password response contains a **new token** without the flag (no second login needed).
 
 ---
 

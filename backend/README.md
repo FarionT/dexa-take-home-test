@@ -60,6 +60,31 @@ The init script runs only when the data volume is empty. After changing DB names
 
 Stop MySQL with `docker compose down` (data is kept).
 
+## API
+
+Full reference per feature in [`docs/api/`](docs/api/): [auth](docs/api/auth.md).
+
+All requests go to the gateway (`http://localhost:3000`). Every endpoint needs `Authorization: Bearer <access_token>` unless marked public.
+
+| Method | Path | Access | Body | Response |
+|--------|------|--------|------|----------|
+| GET | `/health` | public | — | `data`: each service's and database's status |
+| POST | `/auth/login` | public | `{ email, password }` | `data`: `{ access_token, token_type, expires_in, user }` |
+| GET | `/auth/me` | any logged-in user | — | `data`: the current user (no password hash) |
+| POST | `/auth/change-password` | any logged-in user | `{ current_password, new_password }` | `data`: a new `{ access_token, … }` |
+
+- Passwords are hashed with **bcrypt** (`bcryptjs`, cost 12). They must be 8–72 bytes and contain a letter and a number (72 bytes is bcrypt's limit; longer passwords are rejected, not cut).
+- A wrong email and a wrong password give the same `401 Invalid email or password`, and take about the same time.
+- A user with a system-generated password (`must_change_password: true`) can only call `/auth/me` and `/auth/change-password` until they change it (`403` elsewhere).
+- **Every response** is `{ "status": 200, "message": "…", "data": … }`: `status` repeats the HTTP code, `data` is left out when empty. Validation errors are `400` with `"message": "Validation failed"` and the problems in `data.errors`. A service that is down gives `503`.
+
+Try it with the seeded HR admin (`SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` from `.env`):
+
+```bash
+curl -s -X POST localhost:3000/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"hradmin@company.com","password":"password123!"}'
+```
+
 ## Commands
 
 | Action | Command |
@@ -85,8 +110,24 @@ Stop MySQL with `docker compose down` (data is kept).
 3. Update the model and `docs/database-design.md` to match.
 4. `npm run db:migrate`. Never edit a migration that already ran; add a new one.
 
+## Protecting an endpoint (gateway)
+
+Three global guards run on every request, in this order: `JwtAuthGuard` (valid token?) → `PasswordChangeGuard` (password change pending?) → `RolesGuard` (allowed role?). Use the decorators from `apps/gateway/src/auth/auth.decorators.ts`:
+
+| Decorator | Effect |
+|-----------|--------|
+| *(none)* | any logged-in user |
+| `@Roles('ADMIN')` | HR only |
+| `@Roles('EMPLOYEE')` | employees **and** HR (ADMIN includes EMPLOYEE) |
+| `@Public()` | no token needed |
+| `@AllowDuringPasswordChange()` | still reachable while `must_change_password` is true |
+| `@CurrentUser() user: JwtPayload` | parameter: the caller's token claims (`user.sub`, `user.employee_id`, `user.role`) |
+
+Always take the user / employee id from `@CurrentUser()`, never from the request body or URL.
+
 ## Adding a message to a service
 
 1. Add the pattern to `libs/shared/src/patterns.ts`, e.g. `EMPLOYEE_PATTERNS.FIND_ALL`.
 2. Handle it in the service's controller with `@MessagePattern(EMPLOYEE_PATTERNS.FIND_ALL)`.
-3. Call it from the gateway with `client.send(EMPLOYEE_PATTERNS.FIND_ALL, payload)`, injecting the client via `@Inject(SERVICE_CLIENTS.employee)`.
+3. Call it from the gateway with `sendToService(client, EMPLOYEE_PATTERNS.FIND_ALL, payload)` (`apps/gateway/src/clients/rpc.ts`), injecting the client via `@Inject(SERVICE_CLIENTS.employee)`. It adds a timeout and turns service errors into HTTP errors.
+4. In the service, report expected failures with `throw rpcError(HttpStatus.CONFLICT, 'Email already used')` (`@app/shared`). The gateway returns that status and message to the client. Any other error becomes a generic `500`.

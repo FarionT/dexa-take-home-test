@@ -4,6 +4,9 @@
  */
 export const AUTH_PATTERNS = {
   PING: 'auth.ping',
+  LOGIN: 'auth.login',
+  ME: 'auth.me',
+  CHANGE_PASSWORD: 'auth.change-password',
 } as const;
 
 export const EMPLOYEE_PATTERNS = {
