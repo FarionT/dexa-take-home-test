@@ -1,0 +1,1 @@
+export { FullPageMessage } from './FullPageMessage'

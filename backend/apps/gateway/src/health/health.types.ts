@@ -2,7 +2,7 @@ import type { ServiceKey } from '@app/shared';
 
 export type ServiceStatus =
   | { status: 'up'; database: 'up' | 'down'; uptime_seconds: number }
-  | { status: 'down'; error: string };
+  | { status: 'down'; error: 'timeout' | 'unreachable' };
 
 export interface HealthResponse {
   /** `degraded` when at least one service does not answer or cannot reach its database. */

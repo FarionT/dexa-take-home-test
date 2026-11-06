@@ -42,6 +42,7 @@ describe('HealthService', () => {
 
     expect(result.status).toBe('degraded');
     expect(result.services.auth.status).toBe('up');
-    expect(result.services.attendance).toEqual({ status: 'down', error: 'Connection refused' });
+    // Public endpoint: no internal details (hosts, ports) in the response.
+    expect(result.services.attendance).toEqual({ status: 'down', error: 'unreachable' });
   });
 });

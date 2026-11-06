@@ -1,111 +1,141 @@
+/*
+ * Tailwind entry. This is the only .css file in the project: Tailwind v4 must be
+ * loaded from plain CSS (as .scss its directives are not processed). Any other
+ * custom styles go in .scss files next to their component.
+ */
+@import 'tailwindcss';
+
+/*
+ * Design tokens. Values switch between light and dark with the system setting;
+ * @theme exposes them as Tailwind colors, e.g. bg-surface, text-ink-muted,
+ * border-danger-line, ring-focus-ring.
+ */
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+  --page: #f6f7f9;
+  --page-accent: linear-gradient(160deg, #eef2ff 0%, #f6f7f9 55%);
+  --surface: #ffffff;
+  --surface-muted: #f1f3f6;
+  --line: #e4e7ec;
+  --line-strong: #cfd4dc;
+  --ink: #101828;
+  --ink-muted: #475467;
+  --ink-subtle: #98a2b3;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
+  --primary: #3e4fd8;
+  --primary-hover: #3240b8;
+  --primary-strong: #2a3599;
+  --primary-soft: #e8ebff;
+  --on-primary: #ffffff;
+  --focus: #3e4fd8;
+  --focus-ring: rgb(62 79 216 / 0.22);
 
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
+  --danger: #d92d20;
+  --danger-ring: rgb(217 45 32 / 0.2);
+  --danger-bg: #fef3f2;
+  --danger-line: #fecdca;
+  --danger-ink: #b42318;
+  --info-bg: #eff4ff;
+  --info-line: #c7d7fe;
+  --info-ink: #2a3599;
+  --success-bg: #ecfdf3;
+  --success-line: #abefc6;
+  --success-ink: #067647;
+  --warning-bg: #fffaeb;
+  --warning-line: #fedf89;
+  --warning-ink: #93370d;
+
+  --card-shadow: 0 1px 2px rgb(16 24 40 / 0.06), 0 12px 32px -12px rgb(16 24 40 / 0.18);
   color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
+    --page: #0f1115;
+    --page-accent: linear-gradient(160deg, #161a2e 0%, #0f1115 55%);
+    --surface: #171a21;
+    --surface-muted: #20242d;
+    --line: #2a2f3a;
+    --line-strong: #3a404d;
+    --ink: #f2f4f7;
+    --ink-muted: #a3acba;
+    --ink-subtle: #6b7383;
 
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
+    --primary: #7c8cff;
+    --primary-hover: #95a2ff;
+    --primary-strong: #c3caff;
+    --primary-soft: #262c52;
+    --on-primary: #0f1115;
+    --focus: #95a2ff;
+    --focus-ring: rgb(124 140 255 / 0.3);
 
-#root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
+    --danger: #f97066;
+    --danger-ring: rgb(249 112 102 / 0.25);
+    --danger-bg: #2b1513;
+    --danger-line: #5c2420;
+    --danger-ink: #fda29b;
+    --info-bg: #161c38;
+    --info-line: #2f3a73;
+    --info-ink: #c3caff;
+    --success-bg: #0f2a1d;
+    --success-line: #1f5a3c;
+    --success-ink: #75e0a7;
+    --warning-bg: #2b2111;
+    --warning-line: #5e4517;
+    --warning-ink: #fec84b;
 
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
-}
-
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+    --card-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 12px 32px -12px rgb(0 0 0 / 0.6);
   }
 }
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-subtle: var(--ink-subtle);
+
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
+  --color-focus: var(--focus);
+  --color-focus-ring: var(--focus-ring);
+
+  --color-danger: var(--danger);
+  --color-danger-ring: var(--danger-ring);
+  --color-danger-bg: var(--danger-bg);
+  --color-danger-line: var(--danger-line);
+  --color-danger-ink: var(--danger-ink);
+  --color-info-bg: var(--info-bg);
+  --color-info-line: var(--info-line);
+  --color-info-ink: var(--info-ink);
+  --color-success-bg: var(--success-bg);
+  --color-success-line: var(--success-line);
+  --color-success-ink: var(--success-ink);
+  --color-warning-bg: var(--warning-bg);
+  --color-warning-line: var(--warning-line);
+  --color-warning-ink: var(--warning-ink);
+
+  --shadow-card: var(--card-shadow);
+  --font-sans: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply min-w-80 bg-page font-sans text-ink antialiased;
   }
-}
-p {
-  margin: 0;
-}
 
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
+  h1,
+  h2,
+  h3 {
+    @apply leading-tight font-semibold text-ink;
+  }
 
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
+  a {
+    @apply text-primary focus-visible:rounded-xs focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-focus;
+  }
 }

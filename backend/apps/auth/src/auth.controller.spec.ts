@@ -1,30 +1,47 @@
 import { Test } from '@nestjs/testing';
 import type { TestingModule } from '@nestjs/testing';
-import { Sequelize } from 'sequelize-typescript';
+import { createPing } from '@app/shared';
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 
+/** The controller only forwards messages; the logic is tested in auth.service.spec.ts. */
 describe('AuthController', () => {
   let controller: AuthController;
-  const authenticate = vi.fn<() => Promise<void>>();
+  const service = {
+    ping: vi.fn(),
+    login: vi.fn(),
+    me: vi.fn(),
+    changePassword: vi.fn(),
+  };
 
   beforeEach(async () => {
-    authenticate.mockReset();
+    Object.values(service).forEach((fn) => fn.mockReset());
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [AuthService, { provide: Sequelize, useValue: { authenticate } }],
+      providers: [{ provide: AuthService, useValue: service }],
     }).compile();
 
     controller = module.get(AuthController);
   });
 
-  it('answers ping with its service name and database up', async () => {
-    authenticate.mockResolvedValue();
+  it('answers ping', async () => {
+    service.ping.mockResolvedValue(createPing('auth', 'up'));
     expect(await controller.ping()).toMatchObject({ service: 'auth', status: 'ok', database: 'up' });
   });
 
-  it('still answers ping when the database is down', async () => {
-    authenticate.mockRejectedValue(new Error('ECONNREFUSED'));
-    expect(await controller.ping()).toMatchObject({ service: 'auth', status: 'ok', database: 'down' });
+  it('forwards login, me and change-password payloads', async () => {
+    service.login.mockResolvedValue('login-result');
+    service.me.mockResolvedValue('me-result');
+    service.changePassword.mockResolvedValue('change-result');
+
+    const login = { email: 'budi@dexa.com', password: 'Secret123' };
+    const change = { user_id: 'user-1', current_password: 'Secret123', new_password: 'NewSecret456' };
+
+    expect(await controller.login(login)).toBe('login-result');
+    expect(await controller.me({ user_id: 'user-1' })).toBe('me-result');
+    expect(await controller.changePassword(change)).toBe('change-result');
+    expect(service.login).toHaveBeenCalledWith(login);
+    expect(service.me).toHaveBeenCalledWith({ user_id: 'user-1' });
+    expect(service.changePassword).toHaveBeenCalledWith(change);
   });
 });
